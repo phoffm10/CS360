@@ -1,0 +1,983 @@
+<title>CS360 Lecture notes -- Strings in C</title>
+<body bgcolor=ffffff>
+<h1>CS360 Lecture notes -- Strings in C</h1>
+<LI><a href=http://web.eecs.utk.edu/~jplank>James S. Plank</a>
+<LI>Directory: 
+<b>/home/plank/cs360/notes/Strings-In-C</b>
+<LI>Lecture notes:
+    <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/Strings-In-C/index.html>
+    <b>http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/Strings-In-C/index.html</b></a>
+<LI>Lecture notes directory: <b>/home/plank/cs360/notes/Strings-In-C</b>
+<LI> Bitbucket: <a href=https://bitbucket.org/jimplank/cs360-lecture-notes>https://bitbucket.org/jimplank/cs360-lecture-notes</a>.
+<LI>
+Original lecture notes ("PointMalloc"): <i>Fri Aug 31 10:39:16 EDT 2007.</i><br>
+<LI> Last modified: <i>
+Wed Jan 17 16:45:00 EST 2018
+</i>
+<hr>
+<h3>Topcoder problems that can give you practice if you do them in C</h3>
+
+<UL>
+<LI> <a href=http://web.eecs.utk.edu/~jplank/topcoder-writeups/2018/DigitStringDiv2/index.html>DigitStringDiv2</a> -- this is an easy one to give you a little string practice.
+<LI> <a href=http://web.eecs.utk.edu/~jplank/topcoder-writeups/2016/EqualSubstrings2/index.html>EqualSubstrings2</a> -- practice with <b>strncmp()</b>, or perhaps with <b>strstr()</b>.
+</UL>
+
+<hr>
+
+In C, we lose the ease of C++ strings, which is a pity. 
+There are a lot of routines to help you create and manipulate strings in C.  
+I go over many of them here.  One important and inconvenient thing about C strings is
+that you have to manage your own memory, and that can lead to many pitfalls.  One
+goal of this lecture is to help you avoid those pitfalls.
+
+<h3>strcpy()</h3>
+
+<pre>
+char *strcpy(char *s1, const char *s2);
+</pre>
+
+<b>Strcpy()</b> assumes that <b>s2</b> is a null-terminated string,
+and that <b>s1</b> is a <b>(char *)</b> with enough characters to
+hold <b>s2</b>, including the null character at the end. <b>Strcpy()</b>
+then copies <b>s2</b> to <b>s1</b>. It also returns <b>s1</b>.  Why
+would you return your first argument?  The answer is historical -- I'll talk
+about it with <b>strdup()</b>.
+<p>
+
+Here's a simple program that uses <b>strcpy()</b> to initialize
+three strings and print them out (this is in 
+<a href=src/strcpy.c><b>src/strcpy.c</b></a>):
+<p>
+For those unfamiliar with "Give Him Six!", please see 
+<a href=http://en.wikipedia.org/wiki/John_Ward_(broadcaster)>this,</a> 
+<a href=https://www.youtube.com/watch?v=-MJJF9_31hU>this</a> or <a href=https://www.wbir.com/article/life/people/homegrown/homegrown-tennessee-legend-john-ward/51-95533043>this</a>.
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Initialize three strings using strcpy() and print them. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main()
+{
+  char give[5];
+  char him[5];
+  char six[5];
+
+  strcpy(give, "Give");
+  strcpy(him, "Him");
+  strcpy(six, "Six!");
+
+  printf("%s %s %s\n", give, him, six);
+  return 0;
+}
+</pre></td></table></center><p>
+
+It runs fine:
+<pre>
+UNIX> <font color=darkred><b>bin/strcpy</b></font>
+Give Him Six!
+UNIX>
+</pre>
+Suppose I try to copy a string that's too big.  For example, look 
+at <b><a href=src/strcpy2.c>src/strcpy2.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* What happens when you call strcpy and didn't allocate enough memory? */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+typedef unsigned long UL;
+
+int main()
+{
+  char give[5];
+  char him[5];
+  char six[5];
+
+  <font color=blue>/* Print the addresses of the three arrays. */</font>
+
+  printf("give: 0x%lx  him: 0x%lx  six: 0x%lx\n", (UL) give, (UL) him, (UL) six);
+
+  <font color=blue>/* This is the same as before -- nice strcpy() statements, and then print. */</font>
+
+  strcpy(give, "Give");
+  strcpy(him, "Him");
+  strcpy(six, "Six!");
+  printf("%s %s %s\n", give, him, six);
+
+  <font color=blue>/* Now, this strcpy() is copying a string that is too big. */</font>
+
+  strcpy(him, "T.J. Houshmandzadeh");
+  printf("%s %s %s\n", give, him, six);
+
+  return 0;
+}
+</pre></td></table></center><p>
+
+Clearly there's a problem with this -- the string "T.J. Houshmandzadeh" is much
+larger than five characters.  Some compilers, like the one on my new Macintosh, 
+will compile this, but others, like
+the one on my old Macintosh, will take issue with it:
+
+<pre>
+UNIX> <font color=darkred><b>gcc -o bin/strcpy2 src/strcpy2.c</b></font>
+src/strcpy2.c: In function 'main':
+src/strcpy2.c:21: warning: call to __builtin___strcpy_chk will always overflow destination buffer
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+That's a wise compiler.  However, compilers are not all-seeing and all-knowing.  Let's fool
+it by writing our own wrapper around <b>strcpy()</b> -- now it can't figure out the
+problem.  
+The code is in <b><a href=src/strcpy3.c>src/strcpy3.c</a></b>.
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This is the same as strcpy2.c, but I write a procedure to call strcpy(), so that
+   even a smart compiler won't figure out that I have a problem. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+typedef unsigned long UL;
+
+void my_strcpy(char *s1, char *s2)
+{
+  strcpy(s1, s2);
+}
+
+int main()
+{
+  char give[5];
+  char him[5];
+  char six[5];
+
+  printf("give: 0x%lx  him: 0x%lx  six: 0x%lx\n", (UL) give, (UL) him, (UL) six);
+
+  strcpy(give, "Give");
+  strcpy(him, "Him");
+  strcpy(six, "Six!");
+
+  printf("%s %s %s\n", give, him, six);
+
+  my_strcpy(him, "T.J. Houshmandzadeh");
+
+  printf("%s %s %s\n", give, him, six);
+  return 0;
+}
+</pre></td></table></center><p>
+
+
+
+Now run it. Your memory addresses may differ, and your output may differ, but the 
+interrelationship will be the same.  I ran this in 32-bit mode on my old Mac:
+<pre>
+UNIX> <font color=darkred><b>bin/strcpy3</b></font>
+give: 0xbfffe060  him: 0xbfffe050  six: 0xbfffe040
+Give Him Six!
+deh T.J. Houshmandzadeh Six!
+UNIX> 
+</pre>
+Take a minute and try to figure out what's going on.  Look at the 
+following picture of memory -- I'm drawing this in big-endian, because it makes
+the character strings easier to parse.
+When we start, space has been allocated
+for <b>give</b>, <b>him</b> and <b>six</b>:
+
+<pre>
+                    |----4 bytes----|           
+                    |               |
+                    | 0 | 1 | 2 | 3 | (I'm drawing this in big endian)
+               
+                    |               |           
+     six----------> |               | 0xbfffe040
+                    |               | 0xbfffe044
+                    |               | 0xbfffe048
+                    |               | 0xbfffe04c
+     him----------> |               | 0xbfffe050
+                    |               | 0xbfffe054
+                    |               | 0xbfffe058
+                    |               | 0xbfffe05c
+     give---------> |               | 0xbfffe060
+                    |               | 0xbfffe064
+                    |               | 0xbfffe068
+                    |               | 0xbfffe06c
+</pre>
+Now, we make the first three <b>strcpy()</b> calls.  At the point of 
+the first <b>printf()</b> statement, 
+memory looks like:
+
+<pre>
+                    |----4 bytes----|           
+                    |               |
+                    | 0 | 1 | 2 | 3 | (I'm drawing this in big endian)
+               
+     six----------> |'S'|'i'|'x'|'!'| 0xbfffe040
+                    | 0 |   |   |   | 0xbfffe044
+                    |   |   |   |   | 0xbfffe048
+                    |   |   |   |   | 0xbfffe04c
+     him----------> |'H'|'i'|'m'| 0 | 0xbfffe050
+                    |   |   |   |   | 0xbfffe054
+                    |   |   |   |   | 0xbfffe058
+                    |   |   |   |   | 0xbfffe05c
+     give---------> |'G'|'i'|'v'|'e'| 0xbfffe060
+                    | 0 |   |   |   | 0xbfffe064
+                    |               | 0xbfffe068
+                    |               | 0xbfffe06c
+</pre>
+
+Now, we make the call <b>strcpy(him, "T.J. Houshmandzadeh")</b>.  What happens is
+that the entire string is copied to <b>him</b>, and this overruns the memory
+allocated for <b>give</b>:
+
+<pre>
+                    |----4 bytes----|           
+                    |               |
+                    | 0 | 1 | 2 | 3 | (I'm drawing this in big endian)
+               
+     six----------> |'S'|'i'|'x'|'!'| 0xbfffe040
+                    | 0 |   |   |   | 0xbfffe044
+                    |   |   |   |   | 0xbfffe048
+                    |   |   |   |   | 0xbfffe04c
+     him----------> |'T'|'.'|'J'|'.'| 0xbfffe050
+                    |' '|'H'|'o'|'u'| 0xbfffe054
+                    |'s'|'h'|'m'|'a'| 0xbfffe058
+                    |'n'|'d'|'z'|'a'| 0xbfffe05c
+     give---------> |'d'|'e'|'h'| 0 | 0xbfffe060
+                    | 0 |   |   |   | 0xbfffe064
+                    |               | 0xbfffe068
+                    |               | 0xbfffe06c
+</pre>
+
+So this means that <b>him</b> is indeed <b>"T.J. Houshmandzadeh"</b>, but
+<b>give</b> has been modified as well, to be <b>"deh"</b>.  This 
+accounts for the printout of:
+<pre>
+deh T.J. Houshmandzadeh Six!
+</pre>
+The bottom line is that when you modify memory that
+you have not allocated (as I did when I called
+<b>strcpy(him, "T.J. Houshmandzadeh");</b>), then strange things will happen.
+They have explanations, but until you figure it out, it will be 
+confusing.  If you're lucky, you get a segmentation violation or
+a bus error.  If you're unlucky, you get wierd, inexplicable output.
+A corollary of this is that when you get a segmentation violation,
+a bus error, or wierd, inexplicable output, then chances are 
+you have modified memory that you didn't allocate.  
+<p>
+Here's the output on my Mac in 2021 -- I may well make this a clicker question, but
+see if you can figure out the output here.
+
+<pre>
+UNIX> <font color=darkred><b>bin/strcpy3</b></font>
+give: 0x7ffeeea63197  him: 0x7ffeeea63192  six: 0x7ffeeea6318d
+Give Him Six!
+Houshmandzadeh T.J. Houshmandzadeh Six!
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+<hr>
+<h3>strcat()</h3>
+
+<pre>
+char *strcat(char *s1, const char *s2);
+</pre>
+
+<b>Strcat()</b> assumes that <b>s1</b> and <b>s2</b> are 
+both null-terminated strings.
+<b>Strcat()</b>
+then concatenates <b>s2</b> to the end of <b>s1</b>.  I don't 
+know what it returns -- read the man page if you care.
+<b>Strcat()</b> assumes that there is enough space in <b>s1</b>
+to hold these extra characters.  Otherwise, you'll start stomping
+over memory that you didn't allocate.  Here is a simple example:
+(this is in 
+<b><a href=src/strcat.c>src/strcat.c</a></b>):
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Using strcpy() and strcat() to create the string "Give Him Six!" incrementally. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main()
+{
+  char givehimsix[15];
+
+  strcpy(givehimsix, "Give");
+  printf("%s\n", givehimsix);
+  strcat(givehimsix, " Him");
+  printf("%s\n", givehimsix);
+  strcat(givehimsix, " Six!");
+  printf("%s\n", givehimsix);
+  return 0;
+}
+</pre></td></table></center><p>
+
+The output is predictable:
+<pre>
+UNIX> <font color=darkred><b>bin/strcat</b></font>
+Give
+Give Him
+Give Him Six!
+UNIX> 
+</pre>
+Look at <a href=src/strcat2.c><b>src/strcat2.c</b></a>.
+Can you explain why the output is the way that it is?  Try filling in memory
+as we did in the <b>strcpy2</b> example above.
+<pre>
+UNIX> <font color=darkred><b>bin/strcat2</b></font>
+give: 0xbfffe060  him: 0xbfffe050  six: 0xbfffe040
+Give Him Six!
+deh T.J. Houshmandzadeh Six!
+deh Help! T.J. Houshmandzadeh Help! Six!
+UNIX> 
+</pre>
+
+C-style strings are a little more difficult to handle than C++ style strings.
+For example, suppose you wanted to create a string with a given number of j's.
+In C++, you might write the following
+(<b><a href=src/makej.cpp>src/makej.cpp</a></b>):
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Create a string with a given number of j's by using string concatenation. */</font>
+
+#include &lt;iostream&gt;
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+using namespace std;
+
+int main(int argc, char **argv)
+{
+  int i, n;
+  string s;
+
+  if (argc != 2) { fprintf(stderr, "usage: makej number\n"); exit(1); }
+  n = atoi(argv[1]);
+
+  for (i = 0; i &lt; n; i++) s += "j";    <font color=blue>// Here is the string concatenation.</font>
+  cout &lt;&lt; s &lt;&lt; endl;
+  return 0;
+}
+</pre></td></table></center><p>
+
+Suppose you want to write the equivalent in C.  It's a little more difficult,
+as you need to call <b>malloc()</b> first, to allocate the string.  However, 
+here it is 
+(<b><a href=src/strcat3.c>src/strcat3.c</a></b>):
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Trying to use strcat() like C++ string concatenation. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main(int argc, char **argv)
+{
+  char *s;
+  int i;
+  int n;
+
+  if (argc != 2) { fprintf(stderr, "usage: strcat3 number\n"); exit(1); }
+
+  n = atoi(argv[1]);
+  s = (char *)</font> malloc(sizeof(char)*(n+1));
+  strcpy(s, "");
+
+  for (i = 0; i &lt; n; i++) strcat(s, "j");  <font color=blue>/* Here's the strcat() call, which is really inefficient. */</font>
+  
+  printf("%s\n", s);
+  return 0;
+}
+</pre></td></table></center><p>
+
+
+When you run them on small numbers, they appear equivalent:
+
+<pre>
+UNIX> <font color=darkred><b>bin/makej 50</b></font>
+jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+UNIX> <font color=darkred><b>bin/strcat3 50</b></font>
+jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+However, try them on a really big number.  Here, I'm going to redirect standard output
+to <b>/dev/null</b>, which throws it away, and I'm going to time it with <b>time</b>:
+
+<pre>
+UNIX> <font color=darkred><b>time sh -c "bin/makej 1000 > /dev/null"</b></font>
+0.002u 0.004s 0:00.01 0.0%	0+0k 0+0io 0pf+0w                         <font color=blue> # Blink of an eye.</font>
+UNIX> <font color=darkred><b>time sh -c "bin/makej 10000 > /dev/null"</b></font>
+0.002u 0.004s 0:00.00 0.0%	0+0k 0+0io 0pf+0w                         <font color=blue> # Blink of an eye.</font>
+UNIX> <font color=darkred><b>time sh -c "bin/makej 100000 > /dev/null"</b></font>
+0.004u 0.004s 0:00.01 0.0%	0+0k 0+0io 0pf+0w                         <font color=blue> # Blink of an eye.</font>
+UNIX> <font color=darkred><b>time sh -c "bin/strcat3 1000 > /dev/null"</b></font>
+0.002u 0.004s 0:00.00 0.0%	0+0k 0+0io 0pf+0w                         <font color=blue> # Blink of an eye.</font>
+UNIX> <font color=darkred><b>time sh -c "bin/strcat3 10000 > /dev/null"</b></font>
+0.039u 0.004s 0:00.04 75.0%	0+0k 0+0io 0pf+0w                         <font color=blue> # A little slower</font>
+UNIX> <font color=darkred><b>time sh -c "bin/strcat3 100000 > /dev/null"</b></font>
+3.468u 0.005s 0:03.47 99.7%	0+0k 0+0io 0pf+0w                         <font color=blue> # Nearly 100 times slower!</font>
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+See the problem?  The C++ string maintains the string's length, so concatenation
+is fast.  In contrast, <b>strcat()</b> has to find the end of the string at each
+call, which makes the program <i>O(n<sup>2</sup>)</i>.  We can fix it, since we
+know where the end of the string is.  This is in
+<b><a href=strcat4.c>strcat4.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+int main(int argc, char **argv)
+{
+  char *s;
+  int i;
+  int n;
+
+  if (argc != 2) { fprintf(stderr, "usage: strcat4 number\n"); exit(1); }
+
+  n = atoi(argv[1]);
+  s = (char *) malloc(sizeof(char)*(n+1));
+  strcpy(s, "");
+
+  for (i = 0; i &lt; n; i++) strcat(s+i, "j");  <font color=blue>/* The only changed line */</font>
+  
+  printf("%s\n", s);
+  return 0;
+}
+</pre></td></table></center><p>
+
+<pre>
+UNIX> <font color=darkred><b>bin/strcat4 50</b></font>
+jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+UNIX> <font color=darkred><b>time sh -c "bin/strcat4 100000 > /dev/null"</b></font>
+0.003u 0.004s 0:00.01 0.0%	0+0k 0+0io 0pf+0w                        <font color=blue> # Back to a the blink of an eye</font>
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Such is life in C.
+
+<hr>
+<h3>strlen()</h3>
+
+<pre>
+size_t strlen(char *s);
+</pre>
+
+<b>Strlen()</b> assumes that <b>s</b> is
+a null-terminated string.  It returns the number of characters
+before the null character.  <b>Strlen()</b> is pretty obvious:
+
+(this is in <a href=src/strlen.c><b>src/strlen.c</b></a>):
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main()
+{
+  char give[5];
+  char him[5];
+  char six[5];
+
+  strcpy(give, "Give");
+  strcpy(him, "Him");
+  strcpy(six, "Six!");
+
+  printf("%s %s %s\n", give, him, six);
+  printf("%ld %ld %ld\n", strlen(give), strlen(him), strlen(six));
+  return 0;
+}
+
+</pre></td></table></center><p>
+
+Output:
+<pre>
+UNIX> <font color=darkred><b>bin/strlen</b></font>
+Give Him Six!
+4 3 4
+</pre>
+
+<hr>
+<h3>strcmp() and strncmp()</h3>
+<pre>
+int strcmp(const char *s1, const char *s2)                     <font color=blue> # We use ints as bools in C.</font>
+int strncmp(const char *s1, const char *s2, int n)
+</pre>
+<b>Strcmp()</b> performs a lexicographic comparison of two strings.  It returns 0 if 
+they are equal, a negative number if <b>s1</b> is less than <b>s2</b>, and a positive
+number otherwise.  You will use <b>strcmp()</b> quite a bit in this class, because
+it's the easiest way to compare two strings.  
+<p>
+<b>Strncmp()</b> stops comparing after <b>n</b> characters, if the null character has not
+be reached yet.  It's a good exercise for you to do the <a href=http://web.eecs.utk.edu/~jplank/topcoder-writeups/2016/EqualSubstrings2/index.html>D2 250-point problem from 
+Topcoder SRM 683</a> as a standalone program in C, using <b>strncmp()</b> and <b>strlen()</b>
+rather than the C++ string library.  I'll probably do it in class.
+
+<hr>
+<h3>strchr()</h3>
+
+<pre>
+char *strchr(const char *s, int c);
+</pre>
+
+<b>Strchr()</b> is how you perform "find" for single characters in C strings.
+It assumes that <b>s</b> is
+a null-terminated string.  <b>C</b> is an integer, but it
+is treated as a character.  <b>Strchr()</b> returns a pointer
+to the first occurrence of the character equal to <b>c</b> 
+in <b>s</b>.  If <b>s</b> does not contain <b>c</b>, then
+it returns <b>NULL</b>.
+<p>
+
+Here is a simple program that prints out whether each line of
+standard input contains a space
+(this is in <b><a href=src/strchr.c>src/strchr.c</a></b>):
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Use strchr() to determine if each line of standard input has a space. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main()
+{
+  char line[100];
+  char *ptr;
+
+  while (fgets(line, 100, stdin) != NULL) {
+    ptr = strchr(line, ' ');
+    if (ptr == NULL) {
+      printf("No spaces\n");
+    } else {
+      printf("Space at character %ld\n", ptr-line);
+    }
+  }
+  return 0;
+}
+</pre></td></table></center><p>
+
+Since you haven't seen <b>fgets()</b> before, go ahead and read the man page.
+The arguments are a buffer of chars, the size of the buffer, and a "stream" from
+which to read.  <b>stdin</b> is a global variable, defined in <b>stdio.h</b> that
+specifies to read from standard input.  <b>fgets()</b> reads a line of text from
+the stream, up to the number of characters specified.  It <i>will</i> include the
+newline at the end of the line, which is often a pain.  Not so here, though.
+<p>
+
+I'm doing a little pointer arithmetic here -- <b>ptr-line</b>
+returns the number of characters between <b>line</b> and <b>ptr</b>.
+Here's an example of this running:
+
+<pre>
+UNIX> <font color=darkred><b>bin/strchr</b></font>
+<font color=darkred><b>Jim</b></font>
+No spaces
+<font color=darkred><b>Jim Plank</b></font>
+Space at character 3
+<font color=darkred><b>James Plank</b></font>
+Space at character 5
+<font color=darkred><b> HI!</b></font>
+Space at character 0
+<font color=darkred><b>     HI!!</b></font>
+Space at character 0
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+We can modify this to print out where all the spaces are.  Check
+out <a href=src/strchr2.c><b>strchr2.c</b></a>:
+
+<pre>
+UNIX> <font color=darkred><b>bin/strchr2</b></font>
+<font color=darkred><b>Jim</b></font>
+No spaces
+<font color=darkred><b>Jim Plank</b></font>
+Space at character 3
+<font color=darkred><b>Jim  Plank</b></font>
+Space at character 3
+Space at character 4
+<font color=darkred><b>  Give   Him   Six!!!</b></font>
+Space at character 0
+Space at character 1
+Space at character 6
+Space at character 7
+Space at character 8
+Space at character 12
+Space at character 13
+Space at character 14
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Go over the code -- why do I say 
+<pre>
+        ptr = strchr(ptr+1, ' ');
+</pre>
+instead of 
+<pre>
+        ptr = strchr(ptr, ' ');
+</pre>
+If you don't know, copy the code, modify it, and see for yourself!
+<p>
+If you want to find substrings rather than single characters, use <b>strstr()</b>
+(read the man page).
+
+<hr>
+<h3>Scanf()</h3>
+
+<b>Scanf()</b> is like <b>printf()</b> in that it takes a format string and some
+parameters.  However, instead of writing the parameters to the terminal, it reads
+from the terminal (or whatever is standard input).
+Where <b>scanf()</b> confuses
+people is that there are no reference variables in C, so you have to use pointers.
+If you put <tt>"%d"</tt> in the format string, then <b>scanf()</b> will read an integer.
+The parameter that you have to pass is a pointer to the integer that you want
+read.  The storage for the integer has to exist.  <b>Scanf()</b> will read the
+integer from standard input, and will fill in the four bytes of the integer.
+<p>
+Here's a simple example in
+<b><a href=src/scanf1.c>src/scanf1.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Read a single integer from standard input using scanf. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  int i;
+  
+  if (scanf("%d", &i) == 1) {
+    printf("Just read i: %d (0x%x)\n", i, i);
+  } else {
+    printf("Scanf() failed for some reason.\n");
+  }
+  exit(0);
+}
+</pre></td></table></center><p>
+
+I have one integer, <b>i</b>.  That's four bytes.  They are located at <i>i</i>'s
+pointer: <b>&amp;i</b>.
+When I call <b>scanf()</b>, I say
+to read an integer from standard input, and fill in those four bytes with that
+integer.  <b>Scanf()</b> returns the number of successful reads that it did.
+If our read is successful, the program prints <i>i</i> in decimal and in hexadecimal.
+<p>
+<pre>
+UNIX> <font color=darkred><b>bin/scanf1</b></font>
+<font color=darkred><b>10</b></font>
+Just read i: 10 (0xa)
+UNIX> <font color=darkred><b>bin/scanf1</b></font>
+<font color=darkred><b>Fred</b></font>
+Scanf() failed for some reason.
+UNIX> <font color=darkred><b>bin/scanf1</b></font>
+<font color=darkred><b>15.999999999999</b></font>
+Just read i: 15 (0xf)
+UNIX> <font color=darkred><b>bin/scanf1</b></font>
+<font color=darkred><b>-15.99999999999999</b></font>
+Just read i: -15 (0xfffffff1)
+UNIX> <font color=darkred><b>bin/scanf1</b></font>
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+Scanf() failed for some reason.
+UNIX> <font color=darkred><b>echo "" | bin/scanf1</b></font>
+Scanf() failed for some reason.
+UNIX> <font color=darkred><b>echo 15fred | bin/scanf1</b></font>
+Just read i: 15 (0xf)
+UNIX>
+</pre>
+
+Let's go over these examples.
+<UL>
+<LI> The first successfully reads 10.
+<LI> In the second,
+I didn't enter a number, so the <b>scanf()</b> call made no matches.
+<LI> In the third, <b>scanf()</b> stops reading when it decides that the input is no longer
+an integer.  In this case, that's at the decimal point, so it successfully reads 15.
+<LI> The same thing happens in the fourth case -- <b>scanf()</b> is not rounding off --
+it's simply reading text until it decides that its no longer reading a number.
+<LI> In the fifth case, I type <b>&lt;CNTL-D&gt;</b>, which ends standard input.
+<b>scanf()</b> in this case returns <b>EOF</b> (defined in <b>stdio.h</b>).  It is
+a negative number, so our program prints that <b>scanf()</b> failed.
+<LI> In the sixth case, I use the program <b>echo</b> to provide standard input.
+In this case, <b>echo</b> produces a blank line, so <b>scanf()</b> returns <b>EOF</b> again.
+<LI> Finally, the last case uses <b>echo</b> again to show that <b>scanf()</b> will successfully
+read the 15.
+</UL>
+
+<p>
+<hr>
+<font color=red>(I usually skip this program in class, but enjoy reading about it here
+if you're interested.)</font>
+<p>
+The program <b><a href=src/scanf2.c>scanf2.c</a></b> is buggy.
+
+<p><center><table border=3 cellpadding=3><td><pre>
+int main()
+{
+  int *i;
+
+  printf("i = 0x%lx\n", (unsigned long) i);
+  if (scanf("%d", i) == 1) {
+    printf("Just read i: %d (0x%x)\n", *i, *i);
+  } else {
+    printf("Scanf() failed for some reason.\n");
+  }
+  exit(0);
+}
+</pre></td></table></center><p>
+
+It will compile (although some nosy compilers will figure out it's buggy and yell at you).
+Whether the bug manifests or not is a matter of luck.
+
+Here's the program on my Mac in 2015:
+
+<pre>
+UNIX> <font color=darkred><b>echo 10 | bin/scanf2</b></font>
+i = 0x7fff5fc01052
+Bus error
+UNIX>
+</pre>
+
+What happened?  The answer is that <i>i</i> is an uninitialized variable.  It randomly
+started with a value of <tt>0x7fff5fc01052</tt>.
+When <b>scanf()</b> tried to stuff the value 10 into
+those four bytes, a hardware error was generated -- that's the bus error.  If you're
+lucky, when your program has uninitialized variables, they lead to segmentation
+violations and bus errors.  If you're unlucky, they won't, and you don't discover
+your bug until (potentially much) later.
+<p>
+Just to test on some other machines,
+here it is on my Raspberry Pi in 2018:
+<pre>
+@raspberrypi:~/CS360/cs360-lecture-notes/CStuff$ <font color=darkred><b>echo 10 | bin/scanf2</b></font>
+i = 0x0
+Segmentation fault
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff$
+</pre>
+
+The fact that <i>i</i> was zero is good here -- the
+segmentation violation clues us into the fact that there is a bug.
+<p>
+In 2018, my Mac gave me the disaster output:
+
+<pre>
+UNIX> <font color=darkred><b>echo 10 | bin/scanf2</b></font>
+i = 0x7fff57c662a0
+Just read i: 10 (0xa)
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+The variable  <i>i</i> just happens to be a legal and aligned address.  The value 10 has
+been stuffed into bytes 
+<tt>0x7fff57c662a0</tt> to <tt>0x7fff57c662a3</tt>.  
+Who knows what that is in my
+program.  The fact that my program simply exits means that this bug is benign, but if I
+were to have lots more going on in my program, this bug would be extremely difficult to
+figure out.  The reason is that when the error manifests, it will be much later in the program,
+when some other part of the program is using addresses 
+<tt>0x7fff57c662a0</tt> to <tt>0x7fff57c662a3</tt>.  
+This is why it pays to be careful when you are programming.
+
+<hr>
+<h3>Strings and scanf</h3>
+
+As we know, a string in C is an array of <b>char</b>'s.  Recall, a char is a one-byte integer,
+which means that it has values between -128 and 127.  Each of those values matches
+to a printable character, with zero equaling the "null" character.
+A string is an array of chars that ends with the null character.  The following
+program
+(<b><a href=src/scanf3.c>src/scanf3.c</a></b>)
+uses <b>scanf()</b> to read a string from standard input, and then to print
+the individual characters:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This program uses scanf and %s to read a string and print out the characters.
+   You should *only* use scanf and %s if you are guaranteed that the string you are
+   reading will not be bigger than the memory allocated to it.  Otherwise, you expose
+   yourself to a buffer overflow attack. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  char s[10];
+  int i;
+  
+  if (scanf("%s", s) != 1) exit(0);
+
+  for (i = 0; s[i] != '\0'; i++) {
+    printf("Character: %d: %3d %c\n", i, s[i], s[i]);
+  }
+  exit(0);
+}
+</pre></td></table></center><p>
+
+Since an array variable like <b>s</b> is equivalent to a pointer
+to the first element, we do not have to pass <b>&amp;s</b>
+to <b>scanf()</b> -- we simply pass <b>s</b>.
+<p>
+This program allows us to see the ASCII character codes for the characters
+in the string "Jim-Plank":
+
+<pre>
+UNIX> <font color=darkred><b>echo "Jim-Plank" | bin/scanf3</b></font>
+Character: 0:  74 J
+Character: 1: 105 i
+Character: 2: 109 m
+Character: 3:  45 -
+Character: 4:  80 P
+Character: 5: 108 l
+Character: 6:  97 a
+Character: 7: 110 n
+Character: 8: 107 k
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+<b>Scanf()</b> with strings is problematic.  
+In particular, think about what happens when you enter a string
+with more than 10 characters.  Memory will get stomped on, just like the 
+<b>strcpy()</b> and <b>strcat()</b> examples above with "T. J. Houshmanzadeh".
+For example, let's send a string with 80,000 'j' characters to <b>bin/scanf3</b>:
+
+<pre>
+UNIX> <font color=darkred><b>bin/makej 80000 | bin/scanf3</b></font>
+Segmentation fault: 11
+UNIX> 
+</pre>
+
+We were lucky to get a segmentation violation -- allowing your input to stomp on your
+memory is the heart of what's called 
+a <a href=https://en.wikipedia.org/wiki/Buffer_overflow>"buffer overflow attack"</a>.
+Using <b>scanf()</b> with strings is a very good way to expose yourself to a buffer 
+overflow attack, unless you can guarantee that your input actually behaves.  Using
+<b>fgets()</b> and subsequently calling <b>sscanf()</b> is a safer way to go.
+
+<hr>
+<font color=red>(I often skip this, too.)</font>
+
+<h3>Sscanf()</h3>
+
+<b>Sscanf()</b> is just like <b>scanf()</b>, except it takes an additional
+string as its first parameter, and it "reads" from that string instead of
+from standard input.  It returns the number of correct matches that it
+made.  Thus, it is quite convenient for converting strings to integers
+and doubles.  It is far superior to <b>atoi()</b> and <b>atof()</b> because
+it lets you know when it fails, which is quite important.
+<p>
+Here's an example program that reads lines of text from standard input,
+and attempts to convert them to ints and doubles.  It is 
+in <b><a href=src/sscanf1.c>src/sscanf1.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+
+int main()
+{
+  char buf[1000];
+  int i, h;
+  double d;
+
+  while (fgets(buf, 1000, stdin) != NULL) {
+    if (sscanf(buf, "%d", &i) == 1) {
+      printf("When treated as an integer, the value is %d\n", i);
+    } 
+    if (sscanf(buf, "%x", &h) == 1) {
+      printf("When treated as hex, the value is 0x%x (%d)\n", h, h);
+    } 
+    if (sscanf(buf, "%lf", &d) == 1) {
+      printf("When treated as a double, the value is %lf\n", d);
+    }
+    if (sscanf(buf, "0x%x", &h) == 1) {
+      printf("When treated as a hex with 0x%%x formatting, the value is 0x%x (%d)\n", h, h);
+    }
+    printf("\n");
+  }
+}
+</pre></td></table></center><p>
+
+Here is an example of it running.
+
+<pre>
+UNIX> <font color=darkred><b>bin/sscanf1</b></font>
+<font color=darkred><b>10</b></font>
+When treated as an integer, the value is 10
+When treated as hex, the value is 0x10 (16)
+When treated as a double, the value is 10.000000
+
+<font color=darkred><b>55.9</b></font>
+When treated as an integer, the value is 55
+When treated as hex, the value is 0x55 (85)
+When treated as a double, the value is 55.900000
+
+<font color=darkred><b>.5679</b></font>
+When treated as a double, the value is 0.567900
+
+<font color=darkred><b>a </b></font>
+When treated as hex, the value is 0xa (10)
+
+<font color=darkred><b>0x10</b></font>
+When treated as an integer, the value is 0
+When treated as hex, the value is 0x10 (16)
+When treated as a double, the value is 16.000000
+When treated as a hex with 0x%x formatting, the value is 0x10 (16)
+
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+The first four inputs should be straightforward.  That last one is a little
+confusing, even to me, and the man page on <b>sscanf()</b> is not helpful.
+From that, it appears that <tt>%x</tt> and <tt>%lf</tt> recognize "<tt>0x</tt>" in the input and 
+perform the proper conversion in hex.  <tt>%d</tt> does not.   That's one of those
+"features" on which I wouldn't rely -- I bet it's not implemented on all machines (that's
+just my gut feeling).
+
+<hr>
+<h1>Strdup()</h1>
+
+You'll be seeing more of <b>strdup()</b> in the Fields lecture, but I'll mention it now.
+The prototype of <b>strdup()</b> is:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+char *strdup(const char *s);
+</pre></td></table></center><p>
+
+It is basically implemented as follows:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+char *strdup(const char s)
+{
+  return strcpy(malloc(strlen(s)+1), s);
+}
+</pre></td></table></center><p>
+
+
+In other words, it makes a copy of the string, allocating memory for the copy.  
+Since it calls <b>malloc()</b>, if you are finished with the copy, you should call <b>free()</b>
+on it, to avoid memory leaks.  See how it uses the return value of <b>strcpy()</b> that 
+we all ignore?  That's the only time you'll see that return value used.  
+Again, we'll see more of <b>strdup()</b> in the Fields lecture.
+
+<hr>
+<h1>Other useful procedures</h1>
+
+I don't go over these, but you'll use them from time to time.  It's good to be aware of
+them.  Read their man pages.
+<p>
+<UL>
+<LI> <b>strrchr()</b> find the last occurrence of a character
+<LI> <b>strstr()</b> find a substring.
+<LI> <b>strcasestr()</b> find a substring but ignore case.
+<LI> <b>strsep()</b> helps you break up strings with delimiters.
+<LI> <b>strncpy()</b> does a restricted strcpy.
+<LI> <b>memcpy()</b> copies one region of memory into another.
+<LI> <b>memcmp()</b> does a byte-by-byte comparison of two regions of memory.
+<LI> <b>bzero()</b> sets a region of memory so that every byte is zero.
+</UL>

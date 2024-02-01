@@ -1,0 +1,65 @@
+<pre>
+Define a pointer as an index into memory (using hex).
+
+Do src/p3.c -- walk through it.  Then compile (ignore warnings) and print.
+
+Show where in memory you find i and j.
+
+And go over jp = j, as opposed to ip = &amp;i
+
+Count up the bytes of local variables.
+
+Different machines -- either show the Pi output or have a pi
+accessible.
+
+------------------------------------------------------------
+Type Casting -- go over p4.c and the type castings.
+
+Now revisit p3 and make the warnings go away.  Use a typedef.
+
+------------------------------------------------------------
+Ints and int *'s as "interchangeable":
+
+Sometimes it feels convenient to interchange pointers and integers.  If you do, you
+should use the long data type.  If you use an int, you'll get into trouble when
+pointers are 8 bytes and ints are 4 bytes.  Look at src/p8.cpp and describe what it does.
+
+The key line is when you set "s2 = i".  Run it and explain the seg fault.
+
+Mention the compiler warning and how helpful it is.
+
+Then show it on a pi with no warnings or seg faults.
+
+Finally -- use a long instead of an int -- that's what's supposed to happen.
+------------------------------------------------------------
+Malloc and free.
+
+No more new and delete.  Show the prototype for malloc & free.  Say what it does.
+Talk about how to use sizeof() correctly in malloc.
+
+Go over src/pm.c -- procedures to malloc and fill in.
+
+Difference between C++ wrt malloc() and new: sh scripts/malloc-v-new.sh
+
+------------------------------------------------------------
+Seg faults and bus errors.
+
+Talk about memory and how some of it exists and some doesn't.  Seg fault.
+Address zero usually causes a seg fault.
+Write the "hello world" of CS360.
+
+And talk about bus errors.
+
+------------------------------------------------------------
+endian.c
+
+Go over the program and the output that is in txt/endian_output.txt
+Use the two pictures.
+
+------------------------------------------------------------
+Alignment within structs.
+
+Talk about alignment within structs.  Then go over pd.c  Don't skimp on this.
+
+------------------------------------------------------------
+If you have time - look at src/pc.c

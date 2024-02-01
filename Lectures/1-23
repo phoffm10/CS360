@@ -1,0 +1,21 @@
+/*
+Types in C
+(7 types in c)
+char;   1 bytes
+short;  2 bytes
+long;   4 or 8 bytes
+float;  4 bytes
+double; 8 bytes
+
+pointer. 4 or 8 bytes
+
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(){
+
+    printf("Hello World\n");
+    return 0;
+}

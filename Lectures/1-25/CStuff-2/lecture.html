@@ -1,0 +1,990 @@
+<title> "C Stuff 2": Pointers, Casting, Malloc, Segmentation Violations and Bus Errors</title>
+<body bgcolor=FFFFFF>
+<h2> "C Stuff 2": Pointers, Casting, Malloc, Segmentation Violations and Bus Errors</h2>
+
+<UL>
+<LI> <a href=http://web.eecs.utk.edu/~jplank>James S. Plank</a>
+<LI> <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/>CS360</a>
+<LI> Url: <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/CStuff-2/lecture.html><b>
+                  http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/CStuff-2/lecture.html</b></a>
+<LI> Programs are on the UT lab machines at <b>~jplank/cs360/notes/CStuff-2</b>
+<LI> And bitbucket: <a href=https://bitbucket.org/jimplank/cs360-lecture-notes>https://bitbucket.org/jimplank/cs360-lecture-notes</a>.
+<LI> Originally written in 1995.
+<LI> Last modification: <i>
+Tue Jan 19 17:04:02 EST 2021
+</i>
+</UL>
+<hr>
+
+<h2>Pointers</h2>
+
+Pointers are where most people mess up in C.  A pointer is simply a
+index to memory.  Memory can be allocated in one of two ways -- by
+declaring variables, or by calling <b>malloc()</b> (there is no <b>new</b> in C).  
+Whenever memory has been allocated, you can set a pointer to it.
+<p>
+You can view memory as one huge array of bytes (chars).  This array has
+2<sup>32</sup> or 2<sup>64</sup> elements.  
+Usually, we consider the indices to this array in 
+hexadecimal.  In other words, the array goes from <b>0x0</b> to 
+<b>0xffffffff</b> (or <b>0xffffffffffffffff</b>).
+<p>
+A pointer is simply an index of this array.  Whenever we allocate <i>x</i> bytes
+of memory, we are reserving <i>x</i> contiguous elements from the memory array.
+If we set a pointer to these bytes, then that pointer will be the index
+of the first allocated byte in memory.
+<p>
+For example, look at the following program (in 
+<b><a href=src/p3.c>src/p3.c</a></b>):
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Print out pointers of local variables */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  int i;
+  char j[14];
+  int *ip;
+  char *jp;
+
+  ip = &i;
+  jp = j;
+
+  printf("ip = 0x%lx.  jp = 0x%lx\n", ip, jp);
+  return 0;
+}
+</pre></td></table></center><p>
+
+This program allocates one integer (<b>i</b>), an array of 14 characters 
+(<b>j</b>), and
+two pointers (<b>ip</b> and <b>jp</b>).  
+It then sets the pointers so that they point to
+the memory allocated for <b>i</b> and <b>j</b>.  Finally, 
+it prints out the values of those
+pointers -- these are indices into the memory array.  
+<p>
+Unfortunately, when we try to compile this, we get warnings.  Don't worry
+about them yet -- we'll get to that.  It still compiles correctly.
+<p>
+When we run it, we get the following (this was on my Mac in 2015)
+<pre>
+UNIX> <font color=darkred><b>bin/p3</b></font>
+ip = 0x7fff2efcdd9c.  jp = 0x7fff2efcdda0
+UNIX> <font color=darkred><b></b></font>
+</pre>
+What this means is that when we view memory as an array, elements
+<b>0x7fff2efcdd9c</b>, <b>0x7fff2efcdd9d</b>, <b>0x7fff2efcdd9e</b>, 
+and <b>0x7fff2efcdd9f</b> are allocated for
+the local variable <b>i</b>, and elements <b>0x7fff2efcdda0</b> 
+through <b>0x7fff2efcddad</b>
+are allocated for the array <b>j</b>.  When you run this on your own machine,
+you will get different pointer values.  Regardless of the pointer values,
+<b>ip</b> will point to the first of the four bytes of <b>i</b>, and 
+<b>jp</b> will point to the first of the fourteen bytes of <b>j</b>.
+<p>
+Note that I said ``<b>jp = j</b>'' and not ``<b>jp = &j</b>''.  
+This is because when 
+treated as an expression, an array is equivalent to a pointer.  The only
+difference is that you cannot assign a value to an array variable.  Thus,
+you can say ``<b>jp = j</b>'', but you cannot say ``<b>j = jp</b>''.  
+Moreover, you cannot
+take the address of an array variable -- saying ``<b>&j</b>'' is illegal. 
+<p>
+Pointers are a little like scalars -- they too can be declared as globals, 
+locals or parameters, and can be assigned values, passed as parameters, and 
+returned from procedures.  On our lab machines, pointers are 8 bytes.  Thus,
+in <b>p3.c</b>, there are 34 bytes of local variables allocated in the 
+<b>main()</b>
+procedure -- 4 for <b>i</b>, 14 for <b>j</b>, 
+8 for <b>ip</b>, and 8 for <b>jp</b>.
+<p>
+One of the nice things about 32-bit machines is that their pointers don't
+seem so unwieldy.  On my Pi, the output is:
+
+<pre>
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff-2$ <font color=darkred><b>bin/p3</b></font>
+ip = 0x7eeb050c.  jp = 0x7eeb04fc
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff-2$ 
+</pre>
+
+That feels more manageable, doesn't it?  
+
+<hr>
+<h2>Type Casting (sometimes called ``type coercion'')</h2>
+
+There are times when you would like
+to take a variable that is stored in <i>x</i> bytes, and assign them to 
+a variable that is stored in <i>y</i> bytes.  This is called ``type casting''.  A simple
+example is when you want to turn a <b>char</b> into an <b>int</b>, 
+or an <b>int</b> into a <b>float</b> as in 
+<b><a href=src/p4.c>src/p4.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This program assigns a char to an int, and the int to a float.
+   Although it looks benign, there are some things going on 
+   beneath the hood (changing number formats). */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  char c;
+  int i;
+  float f;
+
+  c = 'a';
+  i = c;
+  f = i;
+
+  printf("c = %d (%c).   i = %d (%c).  f = %f\n", c, c, i, i, f);
+  return 0;
+}
+</pre></td></table></center><p>
+
+The statement `<b>i = c</b>' is a type cast, as is the statement `<b>f = i</b>'.
+There are no surprises when we run this:
+<pre>
+UNIX>. <font color=darkred><b>bin/p4</b></font>
+c = 97 (a).   i = 97 (a).  f = 97.000000
+UNIX> <font color=darkred><b></b></font>
+</pre>
+<p>
+Some type castings, like the ones above, are very natural.  The C compiler 
+will do these for you without complaining.  For most others, the C
+compiler will spit out a warning, unless you specifically tell it that you are
+doing a type cast. This is a way of telling the compiler ``Yes, I know 
+what I'm doing.''  
+<p>
+An example is program 
+<b><a href=src/p3.c>src/p3.c</a></b> above -- as mentioned, when we compile it, we
+get warnings:
+
+<pre>
+UNIX> <font color=darkred><b>make bin/p3</b></font>
+gcc -o bin/p3 src/p3.c
+src/p3.c:16:39: warning: format specifies type 'unsigned long' but the argument has type 'int *'
+      [-Wformat]
+  printf("ip = 0x%lx.  jp = 0x%lx\n", ip, jp);
+                 ~~~                  ^~
+src/p3.c:16:43: warning: format specifies type 'unsigned long' but the argument has type 'char *'
+      [-Wformat]
+  printf("ip = 0x%lx.  jp = 0x%lx\n", ip, jp);
+                              ~~~         ^~
+                              %s
+2 warnings generated.
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+What's going on is that the compiler parses the format string of <b>printf()</b> and gleans that
+"%lx" desires a <b>long unsigned int</b>, but it's getting an <b>(int *)</b>.  You go ahead
+and perform a type cast on the argument to tell the compiler "Yes, this is an <b>(int *)</b>, 
+but treat it like a <b>(long unsigned int)</b>, please.  I know what I'm doing."  That's in 
+<b><a href=src/p5.c>src/p5.c</a></b>.  To the right, I've used a <b>typedef</b> to make those typecasts
+a little less unweidly.  It's a good trick to know:
+
+<p><center><table border=3 cellpadding=3><td valign=top>
+<b><a href=src/p5.c>src/p5.c</a></b><hr>
+<pre>
+<font color=blue>/* Adding typecast statements to make the 
+   warnings from src/p3.c go away. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  int i;
+  char j[14];
+  int *ip;
+  char *jp;
+
+  ip = &i;
+  jp = j;
+
+  printf("ip = 0x%lx.  jp = 0x%lx\n", 
+         <font color=blue>/* Here they are. */</font>
+         (long unsigned int) ip,   
+         (long unsigned int) jp);
+  return 0;
+}
+</pre></td>
+<td valign=top>
+<b><a href=src/p5a.c>src/p5a.c</a></b><hr>
+<pre>
+<pre>
+<font color=blue>/* Using a typedef to make the typecast 
+   statements a little less cumbersome. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+typedef long unsigned int LU;        <font color=blue>/* Now, I can use "(LU)" rather 
+                                        than "(long unsigned int). */</font>
+int main()
+{
+  int i;
+  char j[14];
+  int *ip;
+  char *jp;
+
+  ip = &i;
+  jp = j;
+
+  printf("ip = 0x%lx.  jp = 0x%lx\n", (LU) ip, (LU) jp);
+  return 0;
+}
+</pre></td></table></center><p>
+
+
+</table></center><p>
+
+The compiler, happy that you have taken responsibility for using mixmatched types,
+compiles it without any warnings:
+
+<pre>
+UNIX> <font color=darkred><b>make bin/p5 bin/p5a</b></font>
+gcc -o bin/p5 src/p5.c
+gcc -o bin/p5a src/p5a.c
+UNIX> <font color=darkred><b>bin/p5</b></font>
+ip = 0x7fff57350268.  jp = 0x7fff5735025a
+UNIX> <font color=darkred><b>bin/p5a</b></font>
+ip = 0x7fff52ba1268.  jp = 0x7fff52ba125a
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+As an aside, some compilers won't print out those warnings.  For example, on my 
+Pi, there is no warning on <b>src/p3.c</b>.  So it goes.
+<p>
+On some machines (like the Pi), both pointers and <b>int</b>s
+are 4 bytes.  This has led many people to treat pointers and <b>int</b>s as
+interchangeable.  For example, look at the code in 
+<b><a href=src/p8.c>src/p8.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* A program where we inadvisedly typecast a pointer to an int and back again.
+   On machines with 8-byte pointers, this is a buggy activity, because you lose
+   data when you typecast from an integer to a pointer. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef long unsigned int LUI;
+
+int main()
+{
+  char s[4];
+  int i;
+  char *s2;
+
+  <font color=blue>/* Copy the string "Jim" to s, then turn the pointer into an integer i.
+     Print out the pointer's value, and i's value. */</font>
+
+  strcpy(s, "Jim"); 
+  i = (int) s;
+  printf("Before incrementing i.\n");
+  printf("i = %d (0x%x)\n", i, i);
+  printf("s = %ld (0x%lx)\n", (LUI) s, (LUI) s);
+
+  <font color=blue>/* Now increment i, and turn it back into a pointer.  
+     Print out the pointers, and then attempt to print out what they point to. */</font>
+
+  i++;
+  s2 = (char *)</font> i;
+  printf("\n");
+  printf("After incrementing i.\n");
+  printf("s = 0x%lx.  s2 = 0x%lx, i = 0x%x\n", (LUI) s, (LUI) s2, i);
+  printf("s[0] = %c, s[1] = %c, *s2 = %c\n", s[0], s[1], *s2);
+  return 0;
+}
+</pre></td></table></center><p>
+When you set <b>i</b> equal to <b>s</b>, you are losing 4 bytes of information,
+because <b>ints</b> are four bytes, and pointers are eight.  When you set <b>s2</b>
+back to <i>i</i>, it fills in the four bytes that <b>i</b> is missing, typically with zeros,
+but sometimes with -1's.  In either case, it
+will be an illegal address, and you will get a segmentation violation:
+
+<pre>
+UNIX> <font color=darkred><b>bin/p8</b></font>
+Before incrementing i.
+i = -206846176 (0xf3abc720)
+s = 140737281509152 (0x7ffff3abc720)
+
+After incrementing i.
+s = 0x7ffff3abc720.  s2 = 0xfffffffff3abc721, i = 0xf3abc721
+Segmentation fault
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Why does <b>s2</b> have all of those f's?  Because the sign bit of <i>i</i> is
+negative.  Thus, when we set <b>s2</b> to <b>i</b>, it fills in the missing four
+bytes with ones, making <b>s2</b> negative.
+<p>
+The compilers on our lab machines are happy to warn you about your potential problems,
+as evidenced by the warnings here:
+
+<pre>
+UNIX> <font color=darkred><b>make bin/p8</b></font>
+gcc -o bin/p8 src/p8.c
+src/p8.c:30:8: warning: cast to 'char *' from smaller integer type 'int' [-Wint-to-pointer-cast]
+  s2 = (char *) i;
+       ^
+1 warning generated.
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+On a machine with 32-bit pointers, this code will work fine, because now integers and
+pointers are the same size.  The compiler will not complain either:
+
+<pre>
+<font color=blue># This is on a Raspberry Pi</font>
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff-2$ <font color=darkred><b>make bin/p8</b></font>
+gcc -o bin/p8 src/p8.c
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff-2$ <font color=darkred><b>bin/p8</b></font>
+Before incrementing i.
+i = 2126570764 (0x7ec0e50c)
+s = 2126570764 (0x7ec0e50c)
+
+After incrementing i.
+s = 0x7ec0e50c.  s2 = 0x7ec0e50d, i = 0x7ec0e50d
+s[0] = J, s[1] = i, *s2 = i
+pi@raspberrypi:~/CS360/cs360-lecture-notes/CStuff-2$ 
+</pre>
+
+If we instead use a <b>long</b> for <b>i</b> instead of an <b>int</b>, everything works fine,
+since <b>long</b>s and pointers are guaranteed to be the same size, be that 4 or 8 bytes.
+The program 
+<b><a href=src/p9.c>src/p9.c</a></b>
+makes the requisite changes:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This is the same as src/p8.c, but we've changed i to a long. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef long unsigned int LUI;
+
+int main()
+{
+  char s[4];
+  long i;
+  char *s2;
+
+  strcpy(s, "Jim"); 
+  i = (long) s;
+  printf("Before incrementing i.\n");
+  printf("i = %ld (0x%lx)\n", i, i);
+  printf("s = %ld (0x%lx)\n", (LUI) s, (LUI) s);
+
+  i++;
+  s2 = (char *)</font> i;
+  printf("\n");
+  printf("After incrementing i.\n");
+  printf("s = 0x%lx.  s2 = 0x%lx, i = 0x%lx\n", (LUI) s, (LUI) s2, i);
+  printf("s[0] = %c, s[1] = %c, *s2 = %c\n", s[0], s[1], *s2);
+  return 0;
+}
+</pre></td></table></center><p>
+
+<pre>
+UNIX> <font color=darkred><b>make bin/p9</b></font>
+gcc  -o bin/p9 src/p9.c
+UNIX> <font color=darkred><b>bin/p9</b></font>
+i = 140733481930528 (0x7fff1132cf20)
+s = 140733481930528 (0x7fff1132cf20)
+s = 0x7fff1132cf20.  s2 = 0x7fff1132cf21, i = 0x7fff1132cf21
+s[0] = J, s[1] = i, *s2 = i
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Compilers and machines all differ.  Some machines (like the Pi) have 32-bit
+pointers and rather laconic compilers that don't give you many warnings.  Others,
+like our lab machines, have 64-bit pointers and downright chatty compilers.
+My philosophy is to try to program so that none of them have warnings.  That can be
+a challenge, but you should strive to do the same.
+
+<hr>
+<h2>Malloc and Free</h2>
+
+There is no <b>new</b> or <b>delete</b> in C.  Their functionality is taken by the 
+library calls <b>malloc()</b> and <b>free()</b>.  Read their man pages to see their prototypes 
+and include statements.  This one is from my Linux box in 2015:
+
+<pre>
+<b>SYNOPSIS</b>
+
+       #include &lt;stdlib.h&gt;
+
+       void *malloc(size_t size);
+       void free(void *ptr);
+</pre>
+
+Like <b>new</b>, <b>malloc()</b> allocates bytes of memory from the operating system.
+Unlike <b>new</b>, which requires you to give it information about the data type that it is
+allocating, <b>malloc()</b> simply asks for the number of bytes, and if it is successful,
+it will return a pointer to at least that many bytes, allocated for you by the operating
+system.  It returns a <b>void *</b>, which means it's a pointer, but <b>malloc()</b> doesn't
+know what it's pointing to.  Fortunately, you do know what it's pointing to, and that is what
+you set its return value to.
+<p>
+To figure out how many bytes you need from <b>malloc()</b>, you call <b>sizeof(type)</b>.
+For example, to allocate one integer, you would call <b>malloc(sizeof(int))</b>.
+Often you want to allocate an array of a data type.  To do that, you multiply <b>sizeof(type)</b> 
+by the number of elements.  Your pointer will point to the first of these elements.  
+The next element will be <b>sizeof(type)</b> bytes after the pointer.  And so on.  We'll 
+explore this more soon.
+<p>
+
+For now, take a look at
+<b><a href=src/pm.c>src/pm.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* The point of this program is to show how one may pass a region of bytes 
+   (an array) from procedure to procedure using a pointer. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+<font color=blue>/* This allocates n integers, error checks and returns a pointer to them. */</font>
+
+int *give_me_some_ints(int n)
+{
+  int *p;
+  int i;
+
+  p = (int *)</font> malloc(sizeof(int) * n);
+  if (p == NULL) { fprintf(stderr, "malloc(%d) failed.\n", n); exit(1); }
+  return p;
+}
+
+<font color=blue>/* This takes a pointer to n integers and assigns them to random numbers. */</font>
+
+void fill_in_the_ints(int *a, int n)
+{
+  int i;
+
+  for (i = 0; i &lt; n; i++) a[i] = lrand48();
+}
+
+<font color=blue>/* This reads the command line, allocates, assigns and prints n integers. */</font>
+
+int main(int argc, char **argv)
+{
+  int *array;
+  int size;
+  int i;
+
+  if (argc != 2) { fprintf(stderr, "usage: pm size\n"); exit(1); }
+  size = atoi(argv[1]);
+
+  array = give_me_some_ints(size);
+  fill_in_the_ints(array, size);
+
+  for (i = 0; i &lt; size; i++) printf("%4d %10d\n", i, array[i]);
+  return 0;
+}
+</pre></td></table></center><p>
+
+The procedure <b>give_me_some_ints()</b> allocates an array of <b>n</b> integers and
+returns a pointer to the array.  <b>fill_in_the_ints()</b> takes a pointer to the array,
+plus its size, and fills it in.  Because we are passing pointers, no copies of the array
+are made.  In other words, <b>fill_in_the_ints()</b> fills in the array that was created
+by the <b>malloc()</b> call.  Finally, we print out the array.
+<p>
+Note the difference between C and C++ here:
+
+<UL>
+<LI> You have to tell <b>malloc()</b> how many bytes you want.
+<LI> <b>malloc()</b> does not know how its memory is being used -- it simply allocates bytes.
+<LI> You have to keep track of the array's size.  That is inconvenient compared to a vector.
+<LI> There are no reference variables in C.  Parameters are always copied.  Here, it's the
+    pointer that is being copied, not the data to which it is pointing.
+<LI> For that reason, there is only one copy of the array in this program.
+</UL>
+
+<p>
+<b>free()</b> returns the memory so that it may be reused.  It is analogous to <b>delete</b>
+in C++.  You simply pass it the pointer that <b>malloc()</b> returned.  Don't pass it any
+other pointer, or a pointer that has already been freed, or really ugly things can 
+happen (you'll see this in detail later in the class).
+<p>
+Although some people disagree with this, I am of the opinion that you should only free
+memory that you are going to need for reuse, or perhaps that the system may want to use for
+other programs.  We'll see an example of that in the next lecture.  If you are simply allocating
+memory and then exiting your program, don't bother freeing the memory.  The operating system
+will reclaim it when the program exits.
+
+<hr>
+<h2>Segmentation Violations and Bus Errors</h2>
+
+Memory can be viewed as a giant array of bytes.  However, certain parts of
+this array are not accessible.  For example, typically, elements 0 to 0x1000 are 
+inaccessible.  When you try to access an inaccessible element, you generate
+a <i>segmentation violation</i>.  (In the old days, it would also store the contents
+of memory to a file, called a <i>core dump</i>.  These days, memory is so big that
+we don't generate core dumps, although we could if we had to.)
+<p>
+The reason element 0 is inaccessible is that it's a common
+bug to forget to initialize a pointer.  When that happens, the pointer's 
+value is zero, and when you try to dereference it, you'll generate a 
+segmentation violation, which helps you find the bug.  
+<p>
+The program 
+<a href=src/pa.c><b>src/pa.c</b></a> is kind of like the "Hello World" of CS360 -- our
+first intentional segmentation violation:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* Our first intentional segmentation violation.  When we try to
+   access the element at address zero, (NULL is zero), the hardware
+   tells us that it's illegal by generating a segmentation violation.  */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  char *s;
+
+  s = NULL;
+
+  printf("%d\n", s[0]);   <font color=blue>/* Seg fault here */</font>
+  return 0;
+}
+</pre></td></table></center><p>
+
+
+On many machines,
+whenever you access a scalar type, its value in memory must be <i>aligned</i>.
+What this means is that if the type is 4 bytes, its location in memory 
+must start at a memory index that is a multiple of 4.  For example, if <b>i</b>
+is an <b>(int *)</b>, then if <b>i</b> is not a multiple of 4, dereferencing <b>i</b> will
+be an error.  This error is manifested by a <i>bus error</i>.
+Unfortunately, our machines don't demonstrate this problem, so I won't 
+write code for it.
+
+<hr>
+<h2>More Type Casting, Memory and The Little Endian Representation</h2>
+
+<i>(I owe a debt of graditude to Jay Pickens, a CS360 student in 2015, who wrote
+the first version of this program and these lecture notes.  I have since mangled
+Jay's code beyond repair, so I don't want to attribute it to him, but he has
+my appreciation for taking the initiative to spearhead some extra illuminating
+code to explore little endianness and pointers.)</i>
+<p>
+With C, you can do "dangerous" things, like treat memory generically.  
+In other words, suppose you have a region of bytes.  You can treat that region as if it's
+holding any type you want -- integers, chars, doubles, structs, whatever.  
+Typically, you don't want to leverage this flexibility, because it can get you into 
+a lot of trouble.  However, when you're writing systems programs, this flexbility is
+often essential.  It also helps you understand memory and what is going on with 
+your machine while programs are running.
+<p>
+One such example program that we're going explore is the program 
+<b><a href=src/endian.c>src/endian.c</a></b>.  We're going to walk through this program slowly,
+looking at code and then what happens when it runs.  The output below was on a 32-bit
+machine.  If you compile this on a 64-bit machine, you should still
+be able to follow along, but the pointers will be a lot bigger!
+
+<pre>
+UNIX> <font color=darkred><b>gcc -o bin/endian src/endian.c</b></font>
+UNIX> <font color=darkred><b>bin/endian</b></font>
+</pre>
+
+In this code, I declare an array, called <b>array</b>, which is four unsigned integers.
+I also declare a pointer to an unsigned integer (called <b>ip</b>), and
+I also declare a pointer to an unsigned char (called <b>cp</b>).  I set the four
+integers to four different values in hexadecimal:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+
+typedef unsigned long UL;
+
+int main() 
+{
+  unsigned int array[4]; <font color=blue>/* An array of four integers. */</font>
+  unsigned int *ip;      <font color=blue>/* An integer pointer that we're going to set to one byte beyond array */</font>
+  unsigned char *cp;     <font color=blue>/* An unsigned char pointer for exploring the individual bytes in array */</font>
+  unsigned short *sp;    <font color=blue>/* An unsigned short to show two-byte access. */</font>
+  int i;
+
+  <font color=blue>/* Set array to equal four integers, which we specify in hexadecimal. */</font>
+
+  array[0] = 0x12345678;
+  array[1] = 0x9abcdef0;
+  array[2] = 0x13579bdf;
+  array[3] = 0x2468ace0;
+</pre></td></table></center><p>
+  
+Now, I print the four values, preceded by their locations in memory.
+I print everything in hexadecimal:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+  <font color=blue>/* For each value of array, print it out in hexadecimal.  Also print out its location in memory. */</font>
+
+  for (i = 0; i &lt; 4; i++) {
+    printf("Array[%d]'s location in memory is 0x%lx.  Its value is 0x%x\n", 
+            i, (UL) (array+i), array[i]);
+  }
+</pre></td></table></center><p>
+
+When you run this, you may get different pointer values.  However, their interrelationships
+will be the same as in this lecture.  Here's what I get when I run it (on a 32-bit machine -- it
+works on both).  I have this output stored in 
+<b><a href=txt/endian_output.txt>txt/endian_output.txt</a></b>.
+<p>
+You'll note that
+the four numbers look exactly the same as in the source code.
+
+<pre>
+Array[0]'s location in memory is 0xbff344a8.  Its value is 0x12345678
+Array[1]'s location in memory is 0xbff344ac.  Its value is 0x9abcdef0
+Array[2]'s location in memory is 0xbff344b0.  Its value is 0x13579bdf
+Array[3]'s location in memory is 0xbff344b4.  Its value is 0x2468ace0
+</pre>
+
+Next, I set the unsigned char pointer, <b>cp</b> to equal <b>array</b>, and then I print
+the 16 bytes in hexadecimal, along with their memory locations.  Here's the code:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+  <font color=blue>/* Now, print out the sixteen bytes as bytes, printing each byte's location first. */</font>
+
+  printf("\n");
+  printf("Viewing the values of array as bytes:\n");
+  printf("\n");
+
+  cp = (unsigned char *) array;
+
+  for (i = 0; i &lt; 16; i++) {
+    printf("Byte %2d. Pointer: 0x%lx - Value: 0x%02x\n", i, (UL) (cp+i), cp[i]);
+  }
+</pre></td></table></center><p>
+
+Pay careful attention to the output, especially the values of the bytes.  You may find them
+confusing at first:
+
+<pre>
+Viewing the values of array as bytes:
+
+Byte  0. Pointer: 0xbff344a8 - Value: 0x78
+Byte  1. Pointer: 0xbff344a9 - Value: 0x56
+Byte  2. Pointer: 0xbff344aa - Value: 0x34
+Byte  3. Pointer: 0xbff344ab - Value: 0x12
+Byte  4. Pointer: 0xbff344ac - Value: 0xf0
+Byte  5. Pointer: 0xbff344ad - Value: 0xde
+Byte  6. Pointer: 0xbff344ae - Value: 0xbc
+Byte  7. Pointer: 0xbff344af - Value: 0x9a
+Byte  8. Pointer: 0xbff344b0 - Value: 0xdf
+Byte  9. Pointer: 0xbff344b1 - Value: 0x9b
+Byte 10. Pointer: 0xbff344b2 - Value: 0x57
+Byte 11. Pointer: 0xbff344b3 - Value: 0x13
+Byte 12. Pointer: 0xbff344b4 - Value: 0xe0
+Byte 13. Pointer: 0xbff344b5 - Value: 0xac
+Byte 14. Pointer: 0xbff344b6 - Value: 0x68
+Byte 15. Pointer: 0xbff344b7 - Value: 0x24
+</pre>
+
+Didn't you expect the first byte to be 0x12?   You aren't alone.  This is a feature of
+a "little endian" architecture, which nearly all machines are these days.  When an integer
+is stored in four bytes, the smallest of the bytes is stored first, then the next, the 
+next and the next.  The smallest byte in 0x12345678 is 0x78.  So that's what goes into the
+first byte of the integer.   The next byte is 0x56, etc.
+<p>
+Let's look at a picture of memory: 
+
+<p><center><table border=3><td><a href=img/e1.jpg><img src=img/e1.jpg width=800></a></td></table></center><p>
+
+I have listed each byte's address and its value in hex.  I have then labeled 
+the four pointers, 
+<b>array</b>,
+<b>(array+1)</b>,
+<b>(array+2)</b> and
+<b>(array+3)</b>.  At the bottom, I have grouped together the four bytes of each integer,
+and what their integer representation is.  Study the picture, and make sure you understand
+how it matches the output of the code above.
+<p>
+
+Now, the next snippet of code increments <b>cp</b> by one, and sets <b>ip</b> to equal
+it.  <b>ip</b>'s value is now 0xbff344a9.  We now print out the four integers pointed
+to by <b>ip</b>, <b>(ip+1)</b>, <b>(ip+2)</b> and <b>(ip+3)</b>.  
+
+<p><center><table border=3 cellpadding=3><td><pre>
+  <font color=blue>/* Finally, set the pointer ip to be one byte greater than array,
+     and then print out locations and integers. */</font>
+
+  printf("\n");
+  printf("Setting the pointer ip to be one byte greater than array:\n");
+  printf("\n");
+
+  cp++;
+  ip = (unsigned int *) cp;
+  for (i = 0; i &lt; 4; i++) {
+    printf("(ip+%d) is 0x%lx.  *(ip+%d) is 0x%x\n", i, (UL) (ip+i), i, *(ip+i));
+  }
+</pre></td></table></center><p>
+
+On some machines, 
+this code will have a bus error, because <b>ip</b> is not a multiple of four.  However, it
+works on my Mac and on my Pi.  You may find the output confusing, but don't worry, we'll
+go through it:
+
+<pre>
+Setting the pointer ip to be one byte greater than array:
+
+(ip+0) is 0xbff344a9.  *(ip+0) is 0xf0123456
+(ip+1) is 0xbff344ad.  *(ip+1) is 0xdf9abcde
+(ip+2) is 0xbff344b1.  *(ip+2) is 0xe013579b
+(ip+3) is 0xbff344b5.  *(ip+3) is 0x612468ac
+</pre>
+
+This is best explained by modifying the picture above to reflect <b>ip</b>:
+
+<p><center><table border=3><td><a href=img/e2.jpg><img src=img/e2.jpg width=800></a></td></table></center><p>
+
+Now you can see why each value is as it is.  Also, the "61" in 0x612468ac is a byte that
+is not from the original <b>array</b>.  It can have some other value -- we don't really know 
+what it should be.  It just so happens that when we run it, it is 0x61.
+
+Finally, we print out the first four bytes of <b>array</b>, but as two shorts:
+<p><center><table border=3 cellpadding=3><td><pre>
+  <font color=blue>/* Now, set sp to equal array.  Sp is a pointer to shorts.  We print out sp[0] and sp[1]. */</font>
+
+  printf("\n");
+  printf("Finally printing the first four bytes of array as two shorts.\n");
+  printf("\n");
+
+  sp = (unsigned short *) array;
+  printf("Location: 0x%lx - Value as a short: 0x%04x\n", (UL) sp, sp[0]);
+  printf("Location: 0x%lx - Value as a short: 0x%04x\n", (UL) (sp+1), sp[1]);
+  printf("\n");
+
+  return 0;
+}
+</pre></td></table></center><p>
+
+Here's the output.  Like integers, shorts are represented in little endian as well, so
+the smallest byte of the first short is at address 0xbff344a9 with a value of 0x56, 
+and the largest byte of the first short is at address 0xbff3444a8 with a value of 0x78:
+
+<pre>
+Finally printing the first four bytes of array as two shorts.
+
+Location: 0xbff344a8 - Value as a short: 0x5678
+Location: 0xbff344aa - Value as a short: 0x1234
+</pre>
+
+<hr>
+<h2>Alignment within structs</h2>
+
+As I mentioned above, some machines require pointers to be aligned.  That means that
+pointers to integers must be multiples of four, pointers to doubles must be multiples of
+eight, and pointers to shorts must be multiples of two.  
+<p>
+In order to meet this requirement, compilers and runtime libraries have been designed
+with two features:
+
+<OL>
+<LI> <b>Malloc()</b> always returns pointers that are multiples of 8.  Remember that
+<b>malloc()</b> does not know the type of the data that will be using the memory that
+it allocates.  So, it always returns a multiple of 8, just to be safe.
+<p>
+<LI> The compiler lays out <b>structs</b> so that its variables are in order in memory,
+and they will be aligned if
+the base pointer for the <b>struct</b> itself is a multiple of eight.  That means that
+the compiler may put some padding into a struct, and make it bigger than you think it
+should be.
+</OL>
+
+To explore this, take a look at the program
+<b><a href=src/pd.c>src/pd.c</a></b>.  This program defines four structs:
+
+<p><center><table border=3 cellpadding=3><td valign=top><pre>
+typedef struct {
+  char b;
+  int i;
+} Char_Int;
+</pre></td>
+
+<td valign=top><pre>
+typedef struct {
+  char b1;
+  char b2;
+  char b3;
+  char b4;
+  int i1;
+} CCCC_Int;
+</pre></td>
+
+<td valign=top><pre>
+typedef struct {
+  char b1;
+  int i1;
+  char b2;
+  int i2;
+} C_I_C_I;
+</pre></td>
+
+<td valign=top><pre>
+typedef struct {
+  int i;
+  char b;
+} Int_Char;
+</pre></td></table></center><p>
+
+For each of these structs, I print the struct's size.  Then, I 
+allocate an array composed of two structs, and then I 
+look at the pointers to each variable.  Here's the code for the
+<b>Char_Int</b> struct:
+
+<p><center><table border=3 cellpadding=3><td valign=top><pre>
+  Char_Int *ci;
+
+  ci = (Char_Int *) malloc(sizeof(Char_Int)*2);
+  printf("The size of a Char_Int is %ld\n", sizeof(Char_Int));
+  printf("I have allocated an array, ci, of two Char_Int's at location 0x%lx\n", (UL) ci);
+  printf("&(ci[0].b) = 0x%lx\n", (UL) &(ci[0].b));
+  printf("&(ci[0].i) = 0x%lx\n", (UL) &(ci[0].i));
+  printf("&(ci[1].b) = 0x%lx\n", (UL) &(ci[1].b));
+  printf("&(ci[1].i) = 0x%lx\n", (UL) &(ci[1].i));
+  printf("\n");
+</pre></td></table></center><p>
+
+I'm not going to include the code for the other structs, because it is very similar to
+the code above.  Let's look at the output for each struct in turn:
+
+<pre>
+UNIX> <font color=darkred><b>bin/pd</b></font>
+The size of a Char_Int is 8
+I have allocated an array, ci, of two Char_Int's at location 0x7f81aac03260
+&(ci[0].b) = 0x7f81aac03260
+&(ci[0].i) = 0x7f81aac03264
+&(ci[1].b) = 0x7f81aac03268
+&(ci[1].i) = 0x7f81aac0326c
+</pre>
+
+Although the struct only uses five bytes (one for <b>b</b> and four for <b>i</b>), the
+size of the struct is 8 bytes.  When we look at the pointers, we see that the first 
+byte of the struct is where you find <b>b</b>, and <b>i</b> is four bytes after <b>b</b>.
+The three bytes between <b>b</b> and <b>i</b> are unused.  Why is this so?  The
+reason is that the pointer for <b>i</b> must be a multiple of four, and <b>b</b>'s address
+has to come before <b>i</b>'s address (this is a compiler standard).  The only way to 
+make that so is to have the three bytes after <b>b</b> be unused.
+
+<p>
+Let's look at the output for the <b>CCCC_Int</b> struct:
+
+<pre>
+The size of a CCCC_Int is 8
+I have allocated an array, cccci, of two CCCC_Int's at location 0x7f81aac03270
+&(cccci[0].b1) = 0x7f81aac03270
+&(cccci[0].b2) = 0x7f81aac03271
+&(cccci[0].b3) = 0x7f81aac03272
+&(cccci[0].b4) = 0x7f81aac03273
+&(cccci[0].i1) = 0x7f81aac03274
+&(cccci[1].b1) = 0x7f81aac03278
+&(cccci[1].b2) = 0x7f81aac03279
+&(cccci[1].b3) = 0x7f81aac0327a
+&(cccci[1].b4) = 0x7f81aac0327b
+&(cccci[1].i1) = 0x7f81aac0327c
+</pre>
+
+As you can see, this struct makes optimal use of memory -- the variables take up 8 bytes,
+and the size of the data structure is 8.  The pointer for <b>i</b> is aligned - Perfect!  
+
+<p>
+The <b>C_I_C_I</b> struct is less optimally arranged.  Here's its output:
+
+<pre>
+The size of a C_I_C_I is 16
+I have allocated an array, cici, of two C_I_C_I's at location 0x7f81aac03280
+&(cici[0].b1) = 0x7f81aac03280
+&(cici[0].i1) = 0x7f81aac03284
+&(cici[0].b2) = 0x7f81aac03288
+&(cici[0].i2) = 0x7f81aac0328c
+&(cici[1].b1) = 0x7f81aac03290
+&(cici[1].i1) = 0x7f81aac03294
+&(cici[1].b2) = 0x7f81aac03298
+&(cici[1].i2) = 0x7f81aac0329c
+</pre>
+
+In order to make sure that the pointers for <b>i1</b> and <b>i2</b> are aligned, we have
+to waste the three bytes after <b>b1</b> and the three bytes after <b>b2</b>.  If we defined
+<b>b2</b> right after <b>b1</b>, the size of the data structure would be 12 rather than 16.
+
+<p>
+Now, look at the last lines of output, for <b>Int_Char</b>.  It may surprise you:
+
+<pre>
+The size of a Int_Char is 8
+I have allocated an array, ic, of two Int_Char's at location 0x7f81aac03290
+&(ic[0].i) = 0x7f81aac03290
+&(ic[0].b) = 0x7f81aac03294
+&(ic[1].i) = 0x7f81aac03298
+&(ic[1].b) = 0x7f81aac0329c
+</pre>
+
+Most students think that <b>sizeof(Int_Char)</b> should be five, because the <b>i</b>
+pointer is the beginning of the struct, and should be aligned, and the
+<b>b</b> pointer doesn't have to worry about alignment.  That would be true if we only
+allocated one of these structs.  However, if we allocate an array of two structs, then
+the second one needs to be aligned too -- if the size of the struct were 5, then <b>ic[1].i</b>
+would not be aligned.  To fix that, the size of the struct is 8, and the three bytes after
+<b>b</b> are wasted.  
+
+<p>
+The bottom line is that if you care about memory, you should lay your structs out
+so that you don't waste too much memory.  If you don't care about memory, don't worry
+about it (or just keep writing programs in Python.....)
+
+<hr>
+<h2>A Common Type Bug</h2>
+
+This looks idiotic, but it is at the heart of most type bugs.
+Look at <b><a href=src/pc.c><c>src/pc.c</c></a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This program shows how you lose information as you
+   convert data from larger types to smaller types. */</font>
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main()
+{
+  char c;
+  int i;
+  int j;
+
+  i = 10000;
+  c = i;         <font color=blue>/* We are losing information here, because 10000 cannot be stored in a byte. */</font>
+  j = c;
+
+  printf("I: %d,   J: %d,       C: %d\n", i, j, c);
+  printf("I: 0x%04x,  J: 0x%04x,   C: 0x%04x\n", i, j, c);
+  return 0;
+}
+</pre></td></table></center><p>
+
+Since <b>c</b> is a <b>char</b>, it cannot hold the value 10000.  It will
+instead hold the lowest order byte of <b>i</b>, which is 16 (0x10).  Then
+when you set <b>j</b> to <b>c</b>, you'll see that <b>j</b> becomes 16.
+<p>
+Also, even our chatty compiler doesn't complain about it.   Make sure
+you understand this bug and the output below:
+
+<pre>
+UNIX> <font color=darkred><b>make pc</b></font>
+gcc -g -c pc.c
+gcc -g -o pc pc.o
+UNIX> <font color=darkred><b>pc</b></font>
+I: 10000,   J: 16,       C: 16
+I: 0x2710,  J: 0x0010,   C: 0x0010
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
