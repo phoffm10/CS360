@@ -40,14 +40,17 @@ int* best_path;
 int* best_path_healing;
 int best_path_length;
 
+//DFS function
 void dfs(Node nodes[], int start, int max_hops, int hop_num){
     if (hop_num > max_hops || nodes[start].visited){
         return;
     }
 
+//Setting current node visited
     nodes[start].visited = true;
     current_healing = initial_power * pow(1-power_reduction, hop_num-1);
 
+//Healing math with power reduction
     if ((nodes[start].max_pp-nodes[start].curr_pp) > current_healing){
         individual_healing = rint(current_healing);
     }
@@ -56,16 +59,20 @@ void dfs(Node nodes[], int start, int max_hops, int hop_num){
     }
     nodes[start].healing = individual_healing;
 
+//Updating current path
     current_path[hop_num - 1] = start;
     int total_healing = 0;
 
+//Adding individual healings to total healing
     for (int i = 0; i < hop_num; i++) {
         total_healing += nodes[current_path[i]].healing;
     }
 
+//Setting best healing if total is greater
     if (total_healing > best_healing) {
         best_healing = total_healing;
 
+        //Sets best path from current
         for (int i = 0; i < hop_num; i++) {
             best_path[i] = current_path[i];
             best_path_healing[i] = nodes[current_path[i]].healing;
@@ -73,6 +80,7 @@ void dfs(Node nodes[], int start, int max_hops, int hop_num){
         best_path_length = hop_num;
     }
 
+//Recursively calls DFS on other nodes
     for (int i = 0; i < nodes[start].adj_size; i++){
         int adjacentIndex = nodes[start].adj[i] - nodes;
 
@@ -80,6 +88,7 @@ void dfs(Node nodes[], int start, int max_hops, int hop_num){
     }
     nodes[start].visited = false;
 }
+
 
 int main(int argc, char *argv[]) {
 
