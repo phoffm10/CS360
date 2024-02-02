@@ -1,19 +1,20 @@
 //Peter Hoffman
-//CS360 Lab1
+//CS360 Lab 1 chain_heal
 /*
 CITES:
 geeksforgeeks DFS in C "https://www.geeksforgeeks.org/c-program-to-implement-dfs-traversal-using-adjacency-matrix-in-a-given-graph/"
 The C Programming Language 2nd Ed., Kernighan and Ritchie - Chapter 1.5, Counting Characters in Input
 Adjacency Lists in C "https://www.programiz.com/dsa/graph-adjacency-list"
-
 */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
 #include <stdbool.h>
- 
+
+//Node struct to store player information and adjacency
 typedef struct node{
     char name[100];
     int x,y;
@@ -26,6 +27,7 @@ typedef struct node{
     struct node** adj;
 } Node;
 
+//Global variables used
 int initial_range, jump_range, num_jumps, initial_power, num_players, individual_healing;
 double power_reduction;
 
@@ -45,43 +47,31 @@ void dfs(Node nodes[], int start, int max_hops, int hop_num){
 
     nodes[start].visited = true;
     current_healing = initial_power * pow(1-power_reduction, hop_num-1);
+
     if ((nodes[start].max_pp-nodes[start].curr_pp) > current_healing){
         individual_healing = rint(current_healing);
     }
     else{
         individual_healing = (nodes[start].max_pp-nodes[start].curr_pp);
     }
-
     nodes[start].healing = individual_healing;
-    //printf("%s Hop: %d Healing: %d\n", nodes[start].name, hop_num, nodes[start].healing);
 
     current_path[hop_num - 1] = start;
-    //best_path_healing[hop_num-1] = individual_healing;
+    int total_healing = 0;
 
-    //if (hop_num == max_hops) {
-        int total_healing = 0;
+    for (int i = 0; i < hop_num; i++) {
+        total_healing += nodes[current_path[i]].healing;
+    }
+
+    if (total_healing > best_healing) {
+        best_healing = total_healing;
+
         for (int i = 0; i < hop_num; i++) {
-            //best_path_healing[i] = nodes[current_path[i]].healing;
-            //total_healing += best_path_healing[i];
-            // printf("Current path #%d: %s +%d\n", i, nodes[current_path[i]].name, nodes[current_path[i]].healing);
-            total_healing += nodes[current_path[i]].healing;
-            //best_path_healing[i] = nodes[current_path[i]].healing;
+            best_path[i] = current_path[i];
+            best_path_healing[i] = nodes[current_path[i]].healing;
         }
-        //list not being populated correctly
-        //keep track of best path length
-        //best healing is correct
-        if (total_healing > best_healing) {
-            // printf("Best: %d, Current: %d\n", best_healing, total_healing);
-            best_healing = total_healing;
-
-
-            for (int i = 0; i < hop_num; i++) {
-                best_path[i] = current_path[i];
-                best_path_healing[i] = nodes[current_path[i]].healing;
-            }
-            best_path_length = hop_num;
-        }
-    //}
+        best_path_length = hop_num;
+    }
 
     for (int i = 0; i < nodes[start].adj_size; i++){
         int adjacentIndex = nodes[start].adj[i] - nodes;
@@ -95,23 +85,24 @@ int main(int argc, char *argv[]) {
 
 Node *n;
 
-//storing command line args
+//Storing command line args
+//Usage is ./chain_heal initial_range jump_range num_hops initial_power power_reduction
 if (argc >= 5){
-initial_range = atoi(argv[1]);      //string to int using atoi
+initial_range = atoi(argv[1]);
 jump_range = atoi(argv[2]);
 num_jumps = atoi(argv[3]);
 initial_power = atoi(argv[4]);
-power_reduction = atof(argv[5]);    //string to double using atof
+power_reduction = atof(argv[5]);
 }
 else{
-    printf("bad usage");
+    printf("Bad usage");
 }
 
-//for counting lines in input
+//Variables used to count lines in input
 num_players = 0;
 char c;
 
-//read file to get num players from newline
+//Read through file to get num_players from newline chars
 do{
     c = getchar();
     if (c == '\n'){
@@ -119,60 +110,40 @@ do{
     }
 } while (c != EOF);
 
-/*
-//testing print lines
-printf("initial range: %d\n", initial_range);
-printf("jump range: %d\n", jump_range);
-printf("num jumps: %d\n", num_jumps);
-printf("initial power: %d\n", initial_power);
-printf("power reduction: %lf\n", power_reduction);
-printf("num players: %d\n", num_players);
-*/
-
-//malloc structs based on # of newline chars
+//malloc node structs based on # of newline chars
 n = (Node *) malloc(sizeof(Node)*num_players);
 if (n == NULL){
     printf("malloc failed\n");
     return 1;
 }
 
-//storing node data
+//Resets the file pointer and stores node information
 rewind(stdin);
 for (int i = 0; i<num_players; i++){
     if (fscanf(stdin, "%d %d %d %d %99s", &n[i].x, &n[i].y, &n[i].curr_pp, &n[i].max_pp, n[i].name)== 5){
     }
     else{
-        printf("error reading data\n");
+        printf("Error reading data\n");
         free(n);
         return 1;
     }
 }
 
-/*
-//testing print lines
-for (int i = 0; i < num_players; i++){
-printf("%d ", n[i].x);
-printf("%d ", n[i].y);
-printf("%d ", n[i].curr_pp);
-printf("%d ", n[i].max_pp);
-printf("%s\n", n[i].name);
-}
-*/
-
-
-//creating adjlist rows
+//Creating adjacency matrix rows
 int** adjlist = (int**)malloc(num_players * sizeof(int*));
 if (adjlist == NULL){
     printf("malloc failed");
 }
-//creating adjlist cols
+
+//Creating adjacency matrix cols
 for(int i = 0; i < num_players; i++){
     adjlist[i] = (int*)malloc(num_players * sizeof(int));
     if (adjlist[i] == NULL){
         printf("malloc failed");
     }
 }
-//populates adjlist based on found distance
+
+//Populates adjacency matrix based on found distance
 for (int i = 0; i < num_players; i++){
     int curr_x = n[i].x;
     int curr_y = n[i].y;
@@ -192,6 +163,7 @@ for (int i = 0; i < num_players; i++){
     }
 }
 
+//Storing adjacency matrix list size in each node
 for (int i = 0; i < num_players; i++) {
     n[i].adj_size = 0;
     for (int j = 0; j < num_players; j++) {
@@ -201,7 +173,7 @@ for (int i = 0; i < num_players; i++) {
     }
 }
 
-//allocate the adjacency lists
+//malloc the adjacency lists for each node
 for (int i = 0; i < num_players; i++) {
     n[i].adj = (struct node**)malloc(n[i].adj_size * sizeof(struct node*));
     if (n[i].adj == NULL) {
@@ -209,7 +181,7 @@ for (int i = 0; i < num_players; i++) {
     }
 }
 
-//adding nodes onto their adjacency lists
+//Populates adjacency lists on each node
 for (int i = 0; i < num_players; i++) {
     int index = 0;
     for (int j = 0; j < num_players; j++) {
@@ -219,46 +191,30 @@ for (int i = 0; i < num_players; i++) {
     }
 }
 
-
-/*
-//prints adjlist
-for (int j = 0; j < num_players; j++){
-    for (int i = 0; i < num_players; i++){
-        printf(" %d ", n[i].adj[j]);
-    }
-    printf("\n");
-}
-*/
-
-//allocating mem for best paths
-    current_path = malloc(num_jumps * sizeof(int));
-    best_path = malloc(num_jumps * sizeof(int));
-    best_path_healing = (int*)malloc(num_jumps * sizeof(int));
+//Allocating memory for best paths
+current_path = malloc(num_jumps * sizeof(int));
+best_path = malloc(num_jumps * sizeof(int));
+best_path_healing = (int*)malloc(num_jumps * sizeof(int));
 
 
-// call dfs
+//Call dfs on first node
 dfs(n, 0, num_jumps, 1);
 
-//run dfs on nodes in initial range
+//Run dfs on all nodes in initial range
 for(int i = 1;i < (num_players); i++){
     double distance = sqrt((pow((n[0].x-n[i].x), 2)+pow((n[0].y-n[i].y), 2)));
     if (distance <= initial_range){
-//        best_healing = 0;
         dfs(n, i, num_jumps, 1);
     }
 }
 
-//best_healing = 0;
-//printf("best path:\n");
-
+//Prints best path from dfs and total healing
 for (int i = 0; i < best_path_length; i++) {
     printf("%s %d\n", n[best_path[i]].name, best_path_healing[i]);
-    //best_healing += n[best_path[i]].healing;
 }
 printf("Total_Healing %d\n", best_healing);
 
-
-//freeing memory
+//Freeing memory
 free(current_path);
 free(best_path);
 free(best_path_healing);
