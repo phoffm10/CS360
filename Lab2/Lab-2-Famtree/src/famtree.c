@@ -17,9 +17,6 @@ TODO
 -How to read in multiple words for name
 */
 
-
-
-// ./bin/famtree < fam1.txt
 typedef struct Person{
     char* key;
     char* name;
@@ -33,8 +30,6 @@ typedef struct Person{
     int max_children;
     bool visited;
 } Person;
-
-//Person *person;
 
 void print_person(Person *p){
     printf("%s\n", p->name);
