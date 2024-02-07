@@ -10,160 +10,120 @@
 #include "fields.h"
 #include "dllist.h"
 
-//general structure
-//output is standard out
 
 // ./bin/famtree < fam1.txt
-typedef struct {
+typedef struct Person{
     char* key;
     char* name;
     char* sex;
     struct Person *father;
     struct Person *mother;
-    struct Person** children;
+    struct Person *father_of;
+    struct Person *mother_of;
     bool visited;
 } Person;
 
-Person *person;
+//Person *person;
+
+void print_person(Person *p){
+        printf("Name: %s\n", p->name);
+        printf("  Sex: %s\n", p->sex);
+        printf("  Father: %s\n", p->father ? p->father->name : "Unknown");
+        printf("  Mother: %s\n", p->mother ? p->mother->name : "Unknown");
+        printf("  Father of: %s\n", p->father_of ? p->father_of->name : "Unknown");
+        printf("  Mother of: %s\n", p->mother_of ? p->mother_of->name : "Unknown");
+        printf("  Children: ");
+        if(p->father_of == NULL && p->mother_of == NULL){
+            printf("None\n");
+        }
+        if (p->father_of != NULL){
+            printf("\n    %s\n", p->father_of->name);
+        }
+        if (p->mother_of != NULL){
+            printf("\n    %s\n", p->mother_of->name);
+        }
+        printf("\n");    
+}
 
 int main(int argc, char *argv[]) {
-  /*
-    //from lecture notes
+    JRB t, tmp;
     IS is;
-    int i;
-
-    //if (argc != 2) { fprintf(stderr, "usage: printwords filename\n"); exit(1); }
- 
-  // Open the file as an inputstruct.  Error check. 
+    Person *p = NULL;   //used to check if person needs to be printed
+    int nsize, i;
+    char* temp;
 
     is = new_inputstruct(NULL);
-    if (is == NULL) {
-        perror(NULL);
-        exit(1);
-    }
+    t = make_jrb();
 
-  // Read each line with get_line().  Print out each word.
-
-    while(get_line(is) >= 0) {
+    while (get_line(is) >= 0) {
         for (i = 0; i < is->NF; i++) {
-            printf("%d: %s\n", is->line, is->fields[i]);
+            nsize = strlen(is->fields[i]);
+            temp = malloc(sizeof(char) * (nsize + 1));
+            strcpy(temp, is->fields[i]);
+
+            if (strcmp(temp, "PERSON") == 0) {
+                //if there was a previous person, print person
+                //this is where i need to input data into JRB tree
+                if (p != NULL) {
+                    print_person(p);
+                }
+
+                //new person every time "PERSON" shows up
+                p = malloc(sizeof(Person));
+
+                //stores name of the new person
+                if (i + 1 < is->NF) {
+                    p->name = strdup(is->fields[i + 1]);
+                }
+            } 
+            //if line does not start with "PERSON", checks other keywords
+            //stores father of person
+            else if (strcmp(temp, "FATHER") == 0) {
+                if (i + 1 < is->NF) {
+                    p->father = malloc(sizeof(Person));
+                    p->father->name = strdup(is->fields[i + 1]);
+                }
+            }
+            //stores mother of person
+            else if (strcmp(temp, "MOTHER") == 0) {
+                if (i + 1 < is->NF) {
+                    p->mother = malloc(sizeof(Person));
+                    p->mother->name = strdup(is->fields[i + 1]);
+                }
+            }
+            //stores father of in person 
+            else if (strcmp(temp, "FATHER_OF") == 0) {
+                //assumes male if father of
+                p->sex = strdup("M");
+                if (i + 1 < is->NF) {
+                    p->father_of = malloc(sizeof(Person));
+                    p->father_of->name = strdup(is->fields[i + 1]);
+                }
+            }
+            //stores mother of in person 
+            else if (strcmp(temp, "MOTHER_OF") == 0) {
+                //assumes female if mother of
+                p->sex = strdup("F");
+                if (i + 1 < is->NF) {
+                    p->mother_of = malloc(sizeof(Person));
+                    p->mother_of->name = strdup(is->fields[i + 1]);
+                }
+            }
+            //stores sex in person 
+            else if (strcmp(temp, "SEX") == 0) {
+                if (i + 1 < is->NF) {
+                    p->sex = strdup(is->fields[i + 1]);
+                }
+            }
         }
     }
-*/
-  /* Free up the memory allocated with new_inputstruct, and
-     close the open file.  This is not necessary in this program, 
-     since we are exiting anyway, but I just want to show how you free it up. */
     
-  //  jettison_inputstruct(is);
-  //end of lecture notes code
-  JRB t, tmp;
-  IS is;
-  Person *p;
-  int nsize, i;
-  char* temp;
-
-  is = new_inputstruct(NULL);
-  t = make_jrb();
-
-  while (get_line(is) >= 0) {
-    for (i = 0; i < is->NF; i++){
-      nsize = strlen(is->fields[i]);
-      temp = (char *) malloc(sizeof(char)*(nsize+1));
-      strcpy(temp, is->fields[i]);      
-      
-
-
-      if (strcmp(temp,"PERSON")==0){
-        p = malloc(sizeof(Person));
-        p->name = (char *) malloc(sizeof(char)*(nsize+1));
-        strcpy(p->name, is->fields[i+1]);
-        printf("Person name: %s\n", p->name);
-      }
-      //how do i add these to a struct
-      if (strcmp(temp,"MOTHER_OF")==0){
-        printf("Is mother to: %s\n", is->fields[i+1]);
-      }
-      //how to add to struct
-      if (strcmp(temp,"FATHER_OF")==0){
-        printf("Is father to: %s\n", is->fields[i+1]);
-      }
-      //how to add to struct
-      if (strcmp(temp,"SEX")==0){
-        printf("Sex is: %s\n", is->fields[i+1]);
-      }
-      //printf("%d: %s\n", is->line, is->fields[i]);
-
+    // prints last person
+    //this is where i need to input data into JRB tree
+    if (p != NULL) {
+        print_person(p);
     }
 
-    /*
-    if (is->NF > 0) {
-
-      // Each line is name followed by score.  The score is easy to get. 
-
-      p = malloc(sizeof(Person));
-
-      // The name is a different matter, because names may be composed of any 
-      //   number of words with any amount of whitespace.  We want to create a 
-      //   name string that has each word of the name separated by one space. 
-  
-      //  Our first task is to calculate the ssize of our name. 
-
-      nsize = strlen(is->fields[1]);
-      for (i = 0; i < is->NF; i++) nsize += (strlen(is->fields[i])+1);
-
-      // We then allocate the string and copy the first word into the string. 
-      if(is->fields[1] == "SEX"){
-      p->sex = (char *) malloc(sizeof(char) + 1);
-      strcpy(p->sex, is->fields[1]);
-      }
-
-      //p->sex = (char *) malloc(sizeof(char) + 1);
-      else{
-      p->name = (char *) malloc(sizeof(char)*(nsize+1));
-      strcpy(p->name, is->fields[1]);
-      }
-
-      // We copy in the remaining words, but note how we do so by calling strcpy
-      //   into the exact location of where the name goes, rather than, say, repeatedly
-      //   calling strcat() as we would do in a C++-like solution.  This is much more 
-      //   efficient (not to mention inconvenient) than using strcat(). 
-         
-      nsize = strlen(is->fields[1]);
-      
-      for (i = 0; i < is->NF; i++) {
-        if(is->fields[2] == "SEX"){
-          strcpy(p->sex, is->fields[i+1]);
-        }
-        else if (is->fields[1] == "PERSON"){
-        p->name[nsize] = ' ';
-        strcpy(p->name+nsize+1, is->fields[i+1]);
-        nsize += strlen(p->name+nsize);
-        }
-      }
-
-      // We create a key for inserting into the red-black tree.  That is going
-      //   to be the score, padded to 10 characters, followed by the name.  We 
-      //   allocate (nsize+12) characters: nsize for the name, 10 for the score,
-      //   one for the space, and one for the null character. 
-
-      p->key = (char *) malloc(sizeof(char) * (nsize + 1));
-      sprintf(p->key, "%s", p->name);
- 
-      jrb_insert_str(t, p->key, new_jval_v((void *) p));
-    }
-  }
-
-  // Traverse the tree and print the people. 
-
-  jrb_traverse(tmp, t) {
-    p = (Person *) tmp->val.v;
-    printf("%-40s %s\n", p->name, p->sex);
-  }
-  */
-  //test printing
-  //printf("%s\n", p->name);
-  }
-    fprintf(stdout, "Hello stdout!\n");
-    fprintf(stderr, "Hello stderr!\n");
-  return 0;
+    jettison_inputstruct(is);
+    return 0;
 }
