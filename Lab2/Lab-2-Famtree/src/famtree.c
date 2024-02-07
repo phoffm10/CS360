@@ -10,6 +10,14 @@
 #include "fields.h"
 #include "dllist.h"
 
+/*
+TODO
+-how do i input data into JRB trees?
+-What should I do with JRB once its loaded
+-How to read in multiple words for name
+*/
+
+
 
 // ./bin/famtree < fam1.txt
 typedef struct Person{
@@ -18,34 +26,32 @@ typedef struct Person{
     char* sex;
     struct Person* father;
     struct Person* mother;
-    struct Person* father_of;//these should be lists of Person structs
-    struct Person* mother_of;
+//    struct Person* father_of;//these should be lists of Person structs
+//    struct Person* mother_of;
     struct Person** children;
+    int num_children;
+    int max_children;
     bool visited;
 } Person;
 
 //Person *person;
 
 void print_person(Person *p){
-        printf("Name: %s\n", p->name);
-        printf("  Sex: %s\n", p->sex);
-        printf("  Father: %s\n", p->father ? p->father->name : "Unknown");
-        printf("  Mother: %s\n", p->mother ? p->mother->name : "Unknown");
-        //these lines for testing -------------
-        printf("  Father of: %s\n", p->father_of ? p->father_of->name : "Unknown");
-        printf("  Mother of: %s\n", p->mother_of ? p->mother_of->name : "Unknown");
-        //-------------------------------------
-        printf("  Children: ");
-        if(p->father_of == NULL && p->mother_of == NULL){
-            printf("None\n");
+    printf("%s\n", p->name);
+    printf("  Sex: %s\n", p->sex);
+    printf("  Father: %s\n", p->father ? p->father->name : "Unknown");
+    printf("  Mother: %s\n", p->mother ? p->mother->name : "Unknown");
+    printf("  Children: ");
+    if(p->num_children == 0){
+        printf("None\n");
+    }
+    for (int j = 0; j < p->num_children; j++) {
+        if(j == 0){
+            printf("\n");
         }
-        if (p->father_of != NULL){
-            printf("\n    %s\n", p->father_of->name);
-        }
-        if (p->mother_of != NULL){
-            printf("\n    %s\n", p->mother_of->name);
-        }
-        printf("\n");    
+        printf("    %s\n", p->children[j]->name);
+    }
+    printf("\n");  
 }
 
 int main(int argc, char *argv[]) {
@@ -74,6 +80,10 @@ int main(int argc, char *argv[]) {
                 //new person every time "PERSON" shows up
                 p = malloc(sizeof(Person));
 
+                p->num_children = 0;
+                p->max_children = 10;
+                p->children = malloc(p->max_children * sizeof(Person*));
+                
                 //stores name of the new person
                 if (i + 1 < is->NF) {
                     p->name = strdup(is->fields[i + 1]);
@@ -97,25 +107,46 @@ int main(int argc, char *argv[]) {
             //stores father of in person 
             else if (strcmp(temp, "FATHER_OF") == 0) {
                 //assumes male if father of
-                p->sex = strdup("M");
+                p->sex = strdup("Male");
                 if (i + 1 < is->NF) {
-                    p->father_of = malloc(sizeof(Person));
-                    p->father_of->name = strdup(is->fields[i + 1]);
+                    if (p->num_children >= p->max_children) {
+                        //resize children array if necessary
+                        p->max_children *= 2;
+                        Person **new_child = realloc(p->children, p->max_children * sizeof(Person*));
+
+                        p->children = new_child;
+                    }
+                    p->children[p->num_children] = malloc(sizeof(Person));
+                    p->children[p->num_children]->name = strdup(is->fields[i + 1]);
+                    p->num_children++;
                 }
             }
             //stores mother of in person 
             else if (strcmp(temp, "MOTHER_OF") == 0) {
                 //assumes female if mother of
-                p->sex = strdup("F");
+                p->sex = strdup("Female");
                 if (i + 1 < is->NF) {
-                    p->mother_of = malloc(sizeof(Person));
-                    p->mother_of->name = strdup(is->fields[i + 1]);
+                    if (p->num_children >= p->max_children) {
+                        //resize children array if necessary
+                        p->max_children *= 2;
+                        Person **new_child = realloc(p->children, p->max_children * sizeof(Person*));
+
+                        p->children = new_child;
+                    }
+                    p->children[p->num_children] = malloc(sizeof(Person));
+                    p->children[p->num_children]->name = strdup(is->fields[i + 1]);
+                    p->num_children++;
                 }
             }
             //stores sex in person 
             else if (strcmp(temp, "SEX") == 0) {
                 if (i + 1 < is->NF) {
-                    p->sex = strdup(is->fields[i + 1]);
+                    if (strcmp(is->fields[i + 1],"M")){
+                        p->sex = strdup("Female");
+                    }
+                    else{
+                        p->sex = strdup("Male");
+                    }
                 }
             }
         }
