@@ -12,8 +12,10 @@
 
 /*
 TODO
--how do i input data into JRB trees?
--What should I do with JRB once its loaded
+-how do i input data into JRB trees? (jrb_insert_str(t, p->key, new_jval_v((void *) p));)
+-what should i set keys as
+-What should I do with JRB once its loaded(how do i find the top of the tree and print in order)
+-when do i use dllists?
 -How to read in multiple words for name
 */
 
@@ -33,7 +35,7 @@ typedef struct Person{
 
 void print_person(Person *p){
     printf("%s\n", p->name);
-    printf("  Sex: %s\n", p->sex);
+    printf("  Sex: %s\n", p->sex ? p->sex : "Unknown");
     printf("  Father: %s\n", p->father ? p->father->name : "Unknown");
     printf("  Mother: %s\n", p->mother ? p->mother->name : "Unknown");
     printf("  Children: ");
@@ -80,6 +82,7 @@ int main(int argc, char *argv[]) {
                 p->children = malloc(p->max_children * sizeof(Person*));
                 
                 //stores name of the new person
+                //----------need to check if person is already stored somehow
                 if (i + 1 < is->NF) {
                     p->name = strdup(is->fields[i + 1]);
                 }
@@ -149,6 +152,7 @@ int main(int argc, char *argv[]) {
     
     // prints last person
     //this is where i need to input data into JRB tree
+    //children are present as a list of nodes in parents and individual nodes, how do i link them?
     if (p != NULL) {
         print_person(p);
     }
