@@ -16,10 +16,11 @@ typedef struct Person{
     char* key;
     char* name;
     char* sex;
-    struct Person *father;
-    struct Person *mother;
-    struct Person *father_of;
-    struct Person *mother_of;
+    struct Person* father;
+    struct Person* mother;
+    struct Person* father_of;//these should be lists of Person structs
+    struct Person* mother_of;
+    struct Person** children;
     bool visited;
 } Person;
 
@@ -30,8 +31,10 @@ void print_person(Person *p){
         printf("  Sex: %s\n", p->sex);
         printf("  Father: %s\n", p->father ? p->father->name : "Unknown");
         printf("  Mother: %s\n", p->mother ? p->mother->name : "Unknown");
+        //these lines for testing -------------
         printf("  Father of: %s\n", p->father_of ? p->father_of->name : "Unknown");
         printf("  Mother of: %s\n", p->mother_of ? p->mother_of->name : "Unknown");
+        //-------------------------------------
         printf("  Children: ");
         if(p->father_of == NULL && p->mother_of == NULL){
             printf("None\n");
@@ -63,8 +66,8 @@ int main(int argc, char *argv[]) {
 
             if (strcmp(temp, "PERSON") == 0) {
                 //if there was a previous person, print person
-                //this is where i need to input data into JRB tree
                 if (p != NULL) {
+                    //this is where i need to input data into JRB tree
                     print_person(p);
                 }
 
