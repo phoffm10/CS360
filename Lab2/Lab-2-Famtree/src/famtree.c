@@ -29,6 +29,8 @@ typedef struct Person{
     char* key;
     char* name;
     char* sex;
+    char* _father;
+    char* _mother;
     struct Person* father;
     struct Person* mother;
 //    struct Person* father_of;//these should be lists of Person structs
@@ -96,10 +98,10 @@ int main(int argc, char *argv[]) {
             // strcmp(is->fields[0], "PERSON")
             if (strcmp(temp, "PERSON") == 0) {
                 //if there was a previous person, print person
-                if (p != NULL) {
+                //if (p != NULL) {
                     //this is where i need to input data into JRB tree
-                    print_person(p, tree, tmp);
-                }
+                //    print_person(p, tree, tmp);
+                //}
 
                 //p = new_named_person(is->fields, nsize);
                 
@@ -201,6 +203,10 @@ int main(int argc, char *argv[]) {
                         strcat(p->children[p->num_children]->name, is->fields[i+1]);
                     }
                     p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
+                    
+                    //p->children[p->num_children]->father = p;
+                    //jrb_delete_node(jrb_find_str(tree, p->children[p->num_children]->name));
+                    //jrb_insert_str(tree, p->children[p->num_children]->name, new_jval_v((void *) p->children[p->num_children]));
 
                     p->num_children++;
                 }
@@ -225,8 +231,13 @@ int main(int argc, char *argv[]) {
                     for (i = 1; i < is->NF-1; i++) {
                         strcat(p->children[p->num_children]->name," ");
                         strcat(p->children[p->num_children]->name, is->fields[i+1]);
+                        
                     }
                     p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
+                    
+                    //p->children[p->num_children]->mother = p;
+                    //jrb_delete_node(jrb_find_str(tree, p->children[p->num_children]->name));
+                    //jrb_insert_str(tree, p->children[p->num_children]->name, new_jval_v((void *) p->children[p->num_children]));
 
                     p->num_children++;
                 }
@@ -252,14 +263,28 @@ int main(int argc, char *argv[]) {
     // prints last person
     //this is where i need to input data into JRB tree
     //children are present as a list of nodes in parents and individual nodes, how do i link them?
-    if (p != NULL) {
-        print_person(p, tree, tmp);
-    }
+    //if (p != NULL) {
+    //    print_person(p, tree, tmp);
+    //}
 
     printf("-----------------------\n");
     jrb_traverse(tmp, tree) {
-    p = (Person *) tmp->val.v;
-    printf("jrb key: %s, %s\n", p->name, p->sex);
+        p = (Person *) tmp->val.v;
+        printf("%s\n", p->name);
+        printf("  Sex: %s\n", p->sex ? p->sex : "Unknown");
+        printf("  Father: %s\n", p->father!=NULL ? p->father->name : "Unknown");
+        printf("  Mother: %s\n", p->mother!=NULL ? p->mother->name : "Unknown");
+        printf("  Children: ");
+        if(p->num_children == 0){
+        printf("None\n");
+        }
+        for (int j = 0; j < p->num_children; j++) {
+            if(j == 0){
+                printf("\n");
+            }
+        printf("    %s\n", p->children[j]->name);
+    }
+    printf("\n"); 
     }
     printf("-----------------------\n");
 
