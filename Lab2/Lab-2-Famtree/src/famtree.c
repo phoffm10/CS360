@@ -10,11 +10,7 @@
 #include "fields.h"
 #include "dllist.h"
 
-/*
-TODO
--need to implement cycle check correctly
-*/
-
+//Person struct
 typedef struct Person{
     char* key;
     char* name;
@@ -30,54 +26,17 @@ typedef struct Person{
     bool curr_path;
 } Person;
 
+//Forward declarations
 void single_print(JRB tree);
 void reset_flags(JRB tree);
 void cyclecheck(JRB tree);
 bool search(Person* p, char* name, JRB tree);
 
-/*
-void print_person(Person* p, JRB tree, JRB tmp){
-   printf("-----------------------\n");
-    jrb_traverse(tmp, tree) {
-        p = (Person *) tmp->val.v;
-        //p->printed = true;
-        printf("%s\n", p->name);
-        printf("  Sex: %s\n", p->sex ? p->sex : "Unknown");
-        //printf("  Father: %s\n",p->father->name);
-        printf("  Father: %s\n", p->father!=NULL ? p->father->name : "Unknown");
-        printf("  Mother: %s\n", p->mother!=NULL ? p->mother->name : "Unknown");
-        printf("  Children: ");
-        if(p->num_children == 0){
-        printf("None\n");
-        }
-
-        //printf("%d %p\n", p->num_children, p->children);
-        //fflush(stdout);
-        for (int j = 0; j < p->num_children; j++) {
-            if(j == 0){
-                printf("\n");
-            }
-        
-        //printf("%p\n", p->children[j]);
-        //fflush(stdout);
-
-        printf("    %s\n", p->children[j]->name);
-    }
-    printf("num_parents: %d", p->num_parents);
-    printf("visited: %d\n", p->visited);
-    printf("printed: %d\n", p->printed);
-    printf("\n"); 
-    }
-    printf("-----------------------\n");
-}
-*/
-
-//returns person* if found and new person if not
+//Function to find person if they exist or return a new person*
 Person* get_person(Person* p, JRB tree, char* name){
     JRB tmp = jrb_find_str(tree, p->name);
     if (tmp == NULL) {
-    //create new key from name if key not found
-        //p = malloc(sizeof(Person));
+        //Create new key from name if key not found
         p->key = strdup(p->name);
         p->mother = NULL;
         p->father = NULL;
@@ -93,11 +52,11 @@ Person* get_person(Person* p, JRB tree, char* name){
         return p;
     }
     else{
-        // return p;
         return tmp->val.v;
     }
 }
 
+//Function to print a person struct
 void print(Person* p){
     printf("%s\n", p->name);
     printf("  Sex: %s\n", p->sex ? p->sex : "Unknown");
@@ -107,8 +66,6 @@ void print(Person* p){
     if(p->num_children == 0){
     printf("None\n");
     }
-        //printf("%d %p\n", p->num_children, p->children);
-        //fflush(stdout);
     for (int j = 0; j < p->num_children; j++) {       
         if(j == 0){
             printf("\n");
@@ -120,12 +77,14 @@ void print(Person* p){
     }
     printf("\n");
 }
-//searches for key and reinserts person with same key
+
+//Searches for key and reinserts person with same key
 void update_node(JRB tree, char* name, Person* p){
     jrb_delete_node(jrb_find_str(tree, name));
     jrb_insert_str(tree, name, new_jval_v((void *) p));
 }
 
+//Function to check if all nodes have been printed
 bool all_printed(JRB tree){
     JRB tmp;
     jrb_traverse(tmp, tree){
@@ -137,6 +96,7 @@ bool all_printed(JRB tree){
     return true;
 }
 
+//Topologically sort the JRB tree
 void topsort(JRB tree){
     JRB tmp;
     while(!all_printed(tree)){
@@ -188,11 +148,12 @@ void topsort(JRB tree){
                         p->printed = true;
                     }
             }
-        }
-        
+        }        
     }
+
 }
 
+//Used if only single parents remaining
 void single_print(JRB tree){
     Dllist list;
     Dllist dtmp;
@@ -203,7 +164,6 @@ void single_print(JRB tree){
     jrb_traverse(tmp, tree){
         Person* p = (Person*)tmp->val.v;
         p = get_person(p, tree, p->name);
-            //if person has unprinted parents, need to print parents first.
         if(!p->printed && (p->num_children == 0)){
             p->printed = true;
             jtmp = new_jval_v(p);
@@ -235,63 +195,77 @@ void single_print(JRB tree){
                     }
                 }
             }
+            free(name);
         }
     }
     dll_rtraverse(dtmp, list){
-        //printf("dll print");
         Person* p = (Person* )dtmp->val.v;
         print(p);
     }
+    free_dllist(list);
 }
 
-
+//Function to check for cycles
 void cyclecheck (JRB tree){
-    JRB tmp;
+    JRB tmp, tmp2;
     jrb_traverse(tmp, tree){
         Person* p = (Person*)tmp->val.v;
         char* name = strdup(p->name);
-        
-        if(search(p,name,tree)){
-            fprintf(stderr, "Bad input -- cycle in specification");
-            exit(1);
+        reset_flags(tree);
+
+        if(p->num_children != 0){
+            for(int i = 0; i < p->num_children; i++){ 
+                JRB tmp2;
+                Person* ptemp = malloc(sizeof(Person));
+                tmp2 = jrb_find_str(tree, p->children[i]->name);
+                ptemp = (Person*) tmp2->val.v;
+                if(search(ptemp,name,tree)){
+                    fprintf(stderr, "Bad input -- cycle in specification\n");
+                    exit(1);
+                }
+            }
         }
     }
 }
 
+//Search component of cycle check
 bool search(Person* p, char* name, JRB tree){
     if(p->visited == true){
-        return false;
+        return true;
     }
     p->visited = true;
+
     if(strcmp(p->name, name) == 0){
         return true;
     }
-    for(int i = 0; i < p->num_children; i++){
+    for(int i = 0; i < p->num_children; i++){      
+        JRB tmp;
+        tmp = jrb_find_str(tree, p->children[i]->name);
+        Person* ptemp2 = malloc(sizeof(Person));
+        ptemp2 = (Person*)tmp->val.v;
 
-        p->children[i] = get_person(p->children[i], tree, p->children[i]->name);
-        if (search(p->children[i], name, tree)){
+        ptemp2 = get_person(ptemp2, tree, ptemp2->name);
+        if (search(ptemp2, name, tree)){
             return true;
         }
+    ptemp2->visited = false;
     }
     return false;
 }
 
-
-
+//Used to reset visited flags
 void reset_flags(JRB tree) {
     JRB tmp;
-    // Perform DFS traversal from each person in the family tree
     jrb_traverse(tmp, tree) {
         Person* p = (Person *)tmp->val.v;
         p->visited = false;
     }
 }
 
-
 int main(int argc, char *argv[]) {
     JRB tree, tmp;
     IS is;
-    Person *p = NULL;   //used to check if person needs to be printed
+    Person *p = NULL;
     int nsize, i;
     char* temp;
 
@@ -313,10 +287,10 @@ int main(int argc, char *argv[]) {
 
         if (strcmp(temp, "PERSON") == 0) {              
             
-            //new person every time "PERSON" shows up
+            //New person every time "PERSON" shows up
             p = malloc(sizeof(Person));
 
-            //stores name of the name of the person       
+            //Stores name of the name of the person from fields    
             nsize = strlen(is->fields[1]);
             strcpy(name, is->fields[1]);
             for (i = 1; i < is->NF-1; i++) {
@@ -324,19 +298,17 @@ int main(int argc, char *argv[]) {
                 strcat(name, is->fields[i + 1]);
             }
 
-            //stores read name as persons name
+            //Stores read name as persons name
             p->name = strdup(name);
 
-            //if person exists, return person*, if not create a new person* with read name
-            p = get_person(p, tree, p->name);
-            
+            //If person exists, return person*, if not create a new person* with read name
+            p = get_person(p, tree, p->name);            
         } 
-
-        //if line does not start with "PERSON", checks other keywords
         
-        //stores father of person
+        //Stores father of person
         else if (strcmp(temp, "FATHER") == 0) {
             
+            //Read in name from fields
             nsize = strlen(is->fields[1]);
             strcpy(name, is->fields[1]);
             for (i = 1; i < is->NF-1; i++) {
@@ -344,48 +316,48 @@ int main(int argc, char *argv[]) {
                 strcat(name, is->fields[i + 1]);
             }
 
-            //check for two fathers
+            //Check for two fathers
             if(p->father != NULL && strcmp(p->father->name, name) != 0){
                 fprintf(stderr,"Bad input -- child with two fathers on line %d\n", is->line);
                 exit(1);
             }
 
-            //allocates mem for father and reads name
+            //Allocates mem for father and reads name
             p->father = malloc(sizeof(Person));
 
-            //stores read name as fathers name
+            //Stores read name as fathers name
             p->father->name = strdup(name);
             
-            //checks if father already exists
+            //Checks if father already exists
             p->father = get_person(p->father, tree, p->father->name);
             p = get_person(p, tree, p->name);
 
-            //increments childs mother's number of children and adds childs name
+            //Increments childs mother's number of children and adds childs name
             p->father->children[p->father->num_children] = malloc(sizeof(Person));
             p->father->children[p->father->num_children]->name = strdup(p->name);
             p->father->num_children++;
 
-            //Bad input - sex mismatch on line 76
+            //Check for gender reassignment, throw error
             if(p->father->sex!=NULL && strcmp(p->father->sex,"Female")==0){
                 fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                 exit(1);
             }
-            //sets fathers sex as male
+            //Sets fathers sex as male
             p->father->sex = strdup("Male");
 
-            //adds parent to num parents
+            //Adds parent to num parents
             if(p->num_parents < 2){
                 p->num_parents++;
             }
-            //updates fathers node in tree
+            //Updates fathers struct and current struct
             update_node(tree, p->father->name, p->father);
-            update_node(tree, p->name, p);
+            //update_node(tree, p->name, p);
         }
-        //stores mother of person
+
+        //Stores mother of person
         else if (strcmp(temp, "MOTHER") == 0) {
 
-            //Bad input -- child with two mothers on line 67
-            
+            //Read in name from fields            
             nsize = strlen(is->fields[1]);
             strcpy(name, is->fields[1]);
             for (i = 1; i < is->NF-1; i++) {
@@ -393,22 +365,22 @@ int main(int argc, char *argv[]) {
                 strcat(name, is->fields[i + 1]);
             }
 
-            //check for two mothers
+            //Check for two mothers, throw error
             if(p->mother != NULL && strcmp(p->mother->name, name) != 0){
                 fprintf(stderr,"Bad input -- child with two mothers on line %d\n", is->line);
                 exit(1);
             }
 
-            //allocates mem for mother and reads name
+            //Allocates mem for mother and reads name
             p->mother = malloc(sizeof(Person));
-            //stores read name as mothers name
+            //Stores read name as mothers name
             p->mother->name = strdup(name);
             
-            //check of mother already exists
+            //Check of mother already exists
             p->mother = get_person(p->mother, tree, p->mother->name);
-            p = get_person(p, tree, p->name);
+            //p = get_person(p, tree, p->name);
 
-            //increments childs mother's number of children and adds childs name
+            //Increments childs mother's number of children and adds childs name
             p->mother->children[p->mother->num_children] = malloc(sizeof(Person));
             p->mother->children[p->mother->num_children]->name = strdup(p->name);
             p->mother->num_children++;
@@ -421,45 +393,45 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                 exit(1);
             }
-            //sets mothers sex as female            
+            //Sets mothers sex as female            
             p->mother->sex = strdup("Female");
 
-            //updates mothers node in tree
+            //Updates mothers node in tree
             update_node(tree, p->mother->name, p->mother);
             update_node(tree, p->name, p);
-
         }
-        //stores father of in person 
+
+        //Stores father of in person 
         else if (strcmp(temp, "FATHER_OF") == 0) {
             
-            //assumes male if father of
+            //Assumes male if father of
             if(p->sex!=NULL && strcmp(p->sex,"Female")==0){
                 fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                 exit(1);
             }
             p->sex = strdup("Male");
             
-            //resize children array if necessary
+            //Resize children array if necessary
             if (p->num_children >= p->max_children) {
                 p->max_children *= 2;
                 Person **new_child = realloc(p->children, p->max_children * sizeof(Person*));
                 p->children = new_child;
             }
 
-            
+            //Read in next name
             strcpy(name, is->fields[1]);
             for (i = 1; i < is->NF-1; i++) {
                 strcat(name, " ");
                 strcat(name, is->fields[i + 1]);
             }
 
-            //allocates mem for child and reads name
+            //Allocates mem for child and reads name
             p->children[p->num_children] = malloc(sizeof(Person));
             
-            //stores read name in child of father
+            //Stores read name in child of father
             p->children[p->num_children]->name = strdup(name);
             
-            //check if child already exists
+            //Check if child already exists
             p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
             
             if(p->children[p->num_children]->father != NULL && strcmp(p->children[p->num_children]->father->name, p->name) != 0){
@@ -467,28 +439,28 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
 
-            //sets childs father as current person
+            //Sets childs father as current person
             p->children[p->num_children]->father = p;
             if(p->children[p->num_children]->num_parents < 2){
                 p->children[p->num_children]->num_parents++;
             }
             p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
-            //updates child node within father
+            //Updates child struct within father
             update_node(tree, p->children[p->num_children]->name, p->children[p->num_children]);
             update_node(tree, p->name, p);
             p->num_children++;
         }
-        //stores mother of in person 
+        //Stores mother of in person 
         else if (strcmp(temp, "MOTHER_OF") == 0) {
             
-            //assumes female if mother of
+            //Assumes female if mother of
             if(p->sex!=NULL && strcmp(p->sex,"Male")==0){
                 fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                 exit(1);
             }
             p->sex = strdup("Female");
 
-            //resize children array if necessary
+            //Resize children array if necessary
             if (p->num_children >= p->max_children) {
                 p->max_children *= 2;
                 Person **new_child = realloc(p->children, p->max_children * sizeof(Person*));
@@ -501,36 +473,40 @@ int main(int argc, char *argv[]) {
                 strcat(name, is->fields[i + 1]);
             }
 
-            //allocates mem for child and reads name
+            //Allocates mem for child and reads name
             p->children[p->num_children] = malloc(sizeof(Person));
             
-            //stores read name in child of father
+            //Reads name in child of father
             p->children[p->num_children]->name = strdup(name);
 
-            //check if child already exists    
+            //Check if child already exists    
             p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
 
+            //If mother has already been set, throw error
             if(p->children[p->num_children]->mother != NULL && strcmp(p->children[p->num_children]->mother->name, p->name) != 0){
                 fprintf(stderr,"Bad input -- child with two mothers on line %d\n", is->line);
                 exit(1);
             }
 
-            //sets mother of child as current person
+            //Sets mother of child as current person
             p->children[p->num_children]->mother = p;
             if(p->children[p->num_children]->num_parents < 2){
                 p->children[p->num_children]->num_parents++;
             }
             p->children[p->num_children] = get_person(p->children[p->num_children], tree, p->children[p->num_children]->name);
-            //updates childs node within father
+            //Updates childs person struct within mother
             update_node(tree, p->children[p->num_children]->name, p->children[p->num_children]);
 
             p->num_children++;
         }
+
+        //Sets sex of person
         else if (strcmp(temp, "SEX") == 0) {
             
-            //check if person already exists
+            //Check if person already exists
             p = get_person(p, tree, p->name);
             if (strcmp(is->fields[1],"M")){
+                //If sex has already been set, throw error
                 if(p->sex!=NULL && strcmp(p->sex,"Male")==0){
                     fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                     exit(1);
@@ -538,32 +514,44 @@ int main(int argc, char *argv[]) {
                 p->sex = strdup("Female");
             }
             else{
+                //If sex has already been set, throw error
                 if(p->sex!=NULL && strcmp(p->sex,"Female")==0){
                     fprintf(stderr,"Bad input - sex mismatch on line %d\n", is->line);
                     exit(1);
                 }
                 p->sex = strdup("Male");
             }
-            //update person node with new sex
+            //Update person struct
             update_node(tree, p->name, p);
         }
-        //printf("Name: %s\n", name);
-      
+        free(temp);
     }
-
-    //print_person(p, tree, tmp);
+    
     reset_flags(tree);
-/*
-    if(has_cycle(tree)==true){
-        fprintf(stderr, "Bad input -- cycle in specification\n");
-        exit(1);
-    }
-*/
-    //cycle_check(tree);
     //cyclecheck(tree);
     topsort(tree);
-    //top_sort(tree);
 
+
+jrb_traverse(tmp, tree){   
+    Person* p = (Person*)tmp->val.v;
+    free(p->name);
+    free(p->sex);
+    free(p->key);
+    free(p->children);
+    free(p); 
+} 
+  
+/*
+// Freeing p->children array
+    if(p->num_children!=0){
+        for (int i = 0; i < p->num_children; i++) {
+            free(p->children[i]);
+        }
+        free(p->children);
+    }
+    free(p);
+*/
+    jrb_free_tree(tree);
     jettison_inputstruct(is);
     return 0;
 }
