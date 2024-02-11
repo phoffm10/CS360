@@ -175,7 +175,10 @@ void topsort(JRB tree){
             Person* p = (Person*)tmp->val.v;
             p = get_person(p, tree, p->name);
             //if person has unprinted parents, need to print parents first.
-            if(!p->printed && (p->num_parents == 0)){
+            //if(!p->printed && (p->num_parents == 0)){
+            if(!(p->printed) && 
+                (p->mother == NULL || p->mother->printed) && 
+                (p->father == NULL || p->father->printed)){
                 //if not printed and not unprinted persons child
                 //
                 //printf("first print\n");
@@ -233,7 +236,27 @@ void topsort(JRB tree){
         
     }
 }
-
+/*
+void top_sort(JRB tree){
+    while(!all_printed){
+        printf("newtrverse\n");
+        JRB tmp;
+        
+        //p = get_person(p, tree, p->name);
+        jrb_traverse(tmp, tree){
+            Person* p = (Person *)tmp->val.v;
+            p = get_person(p, tree, p->name);
+            if(!(p->printed) && 
+                (p->mother == NULL || p->mother->printed) && 
+                (p->father == NULL || p->father->printed)){
+                
+                print(p);
+                p->printed = true;
+            }
+        }
+    }
+}
+*/
 void single_print(JRB tree){
     Dllist list;
     Dllist dtmp;
@@ -242,25 +265,25 @@ void single_print(JRB tree){
 
     JRB tmp, tmp2, tmp3;
     jrb_traverse(tmp, tree){
-            Person* p = (Person*)tmp->val.v;
-            p = get_person(p, tree, p->name);
+        Person* p = (Person*)tmp->val.v;
+        p = get_person(p, tree, p->name);
             //if person has unprinted parents, need to print parents first.
-            if(!p->printed && (p->num_children == 0)){
+        if(!p->printed && (p->num_children == 0)){
                 //if not printed and not unprinted persons child
                 //
                 //printf("first print\n");
                 //print(p);
-                p->printed = true;
-                jtmp = new_jval_v(p);
-                dll_append(list, jtmp);
+            p->printed = true;
+            jtmp = new_jval_v(p);
+            dll_append(list, jtmp);
 
-                char* name;
-                if(p->mother != NULL){
-                    name = strdup(p->mother->name);
-                }
-                else{
-                    name = strdup(p->father->name);
-                }
+            char* name;
+            if(p->mother != NULL){
+                name = strdup(p->mother->name);
+            }
+            else{
+                name = strdup(p->father->name);
+            }
 
             jrb_traverse(tmp3, tree){
                 jrb_traverse(tmp2, tree){
@@ -280,13 +303,8 @@ void single_print(JRB tree){
                     }
                 }
             }
-
-                jrb_traverse(tmp3, tree){
-
-                    //if father or mother of child, appen
-                }
-            }
         }
+    }
     //printf("$$$$$$$$$$$$$$$$$$$$$$$\n");
     
     dll_rtraverse(dtmp, list){
@@ -301,30 +319,24 @@ void single_print(JRB tree){
 
 //-------------------------------
 bool dfs(Person* p) {
-        // Mark the person as visited and add to the recursion stack
-        p->visited = true;
-        p->curr_path = true;
-        // Recursive DFS for all children of the current person
-        for (int i = 0; i < p->num_children; i++) {
-            if (!p->children[i]->visited) {
-                if(dfs(p->children[i])){
-                return true; // Cycle detected in child's subtree
-                }
-            }
-            else if (p->children[i]->curr_path) {
-                return true; // Cycle detected in current path
+    p->visited = true;
+    p->curr_path = true;
+    for (int i = 0; i < p->num_children; i++) {
+        if (!p->children[i]->visited) {
+            if(dfs(p->children[i])){
+            return true;
             }
         }
-    
-    // Remove the person from the recursion stack
+        else if (p->children[i]->curr_path) {
+            return true;
+        }
+    }
     p->curr_path = false;
     return false;
 }
 
-// Function to check for cycles in the family tree
 void cycle_check(JRB tree) {
     JRB tmp;
-    // Perform DFS traversal from each person in the family tree
     jrb_traverse(tmp, tree) {
         Person* p = (Person *)tmp->val.v;
         if (!p->visited) {
@@ -681,6 +693,7 @@ int main(int argc, char *argv[]) {
     reset_flags(tree);
     cycle_check(tree);
     topsort(tree);
+    //top_sort(tree);
 
     //printf("%d", !jrb_empty(tree));
 
