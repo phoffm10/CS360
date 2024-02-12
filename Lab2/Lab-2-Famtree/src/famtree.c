@@ -30,7 +30,7 @@ typedef struct Person{
 void single_print(JRB tree);
 void reset_flags(JRB tree);
 void cyclecheck(JRB tree);
-bool search(Person* p, char* name, JRB tree);
+bool search(Person* p, JRB seen, JRB all);
 
 //Function to find person if they exist or return a new person*
 Person* get_person(Person* p, JRB tree, char* name){
@@ -210,46 +210,64 @@ void cyclecheck (JRB tree){
     JRB tmp, tmp2;
     jrb_traverse(tmp, tree){
         Person* p = (Person*)tmp->val.v;
-        char* name = strdup(p->name);
-        reset_flags(tree);
-
-        if(p->num_children != 0){
-            for(int i = 0; i < p->num_children; i++){ 
-                JRB tmp2;
-                Person* ptemp = malloc(sizeof(Person));
-                tmp2 = jrb_find_str(tree, p->children[i]->name);
-                ptemp = (Person*) tmp2->val.v;
-                if(search(ptemp,name,tree)){
-                    fprintf(stderr, "Bad input -- cycle in specification\n");
-                    exit(1);
-                }
-            }
+        // char* name = strdup(p->name);
+        // reset_flags(tree);
+        JRB seen = make_jrb();
+        if (search(p, seen, tree)) {
+            fprintf(stderr, "Bad input -- cycle in specification\n");
+            exit(1);
         }
+        jrb_free_tree(seen);
+
+        // if(p->num_children != 0){
+        //     for(int i = 0; i < p->num_children; i++){ 
+        //         JRB tmp2;
+        //         Person* ptemp = malloc(sizeof(Person));
+        //         tmp2 = jrb_find_str(tree, p->children[i]->name);
+        //         ptemp = (Person*) tmp2->val.v;
+        //         if(search(ptemp,name,tree)){
+        //             fprintf(stderr, "Bad input -- cycle in specification\n");
+        //             exit(1);
+        //         }
+        //     }
+        // }
     }
 }
 
 //Search component of cycle check
-bool search(Person* p, char* name, JRB tree){
-    if(p->visited == true){
+bool search(Person *p, JRB seen, JRB all){
+    // if(p->visited == true){
+    //     return true;
+    // }
+    // p->visited = true;
+    if (jrb_find_str(seen, p->name) != NULL) {
         return true;
     }
-    p->visited = true;
+    jrb_insert_str(seen, p->name, new_jval_i(1));
 
-    if(strcmp(p->name, name) == 0){
-        return true;
-    }
+    static int depth = 0;
+    // for (int i=0; i < depth; i++) {
+    //     printf("  ");
+    // }
+
+    // printf("%i: %s\n", depth, p->name);
+    depth++;
     for(int i = 0; i < p->num_children; i++){      
-        JRB tmp;
-        tmp = jrb_find_str(tree, p->children[i]->name);
-        Person* ptemp2 = malloc(sizeof(Person));
-        ptemp2 = (Person*)tmp->val.v;
+        // JRB tmp;
+        // tmp = jrb_find_str(tree, p->children[i]->name);
+        // Person* ptemp2 = malloc(sizeof(Person));
+        // ptemp2 = (Person*)tmp->val.v;
 
-        ptemp2 = get_person(ptemp2, tree, ptemp2->name);
-        if (search(ptemp2, name, tree)){
+        // ptemp2 = get_person(ptemp2, tree, ptemp2->name);
+        if (search(jrb_find_str(all, p->children[i]->name)->val.v, seen, all)){
             return true;
         }
-    ptemp2->visited = false;
+        // ptemp2->visited = false;
     }
+    depth--;
+    // p->visited = false;
+    jrb_delete_node(jrb_find_str(seen, p->name));
+
     return false;
 }
 
@@ -528,7 +546,7 @@ int main(int argc, char *argv[]) {
     }
     
     reset_flags(tree);
-    //cyclecheck(tree);
+    cyclecheck(tree);
     topsort(tree);
 
 
