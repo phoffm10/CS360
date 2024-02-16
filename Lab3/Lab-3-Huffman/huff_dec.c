@@ -252,6 +252,16 @@ int main(int argc, char *argv[]) {
     unsigned int esize = 0;
     fseek(fe, -4, SEEK_END);//should be gotten from int using fseek
     fread(&esize, sizeof(unsigned int), 1, fe);
+    rewind(fe);
+    
+    fseek(fe, 0, SEEK_END);
+    int filesize = (int)ftell(fe);
+
+    if(filesize<4){
+        fprintf(stderr,"Error: file is not the correct size.\n");
+        exit(1);
+        }
+    
     //printf("size: %d\n", esize);
     rewind(fe);
     int charsize = 0;
@@ -265,10 +275,7 @@ int main(int argc, char *argv[]) {
     char *encbuf = malloc(charsize * sizeof(char));
     fread(encbuf, sizeof(char), charsize, fe);
 
-    if(strlen(encbuf)<2){
-        fprintf(stderr,"Error: file is not the correct size.\n");
-        exit(1);
-    }
+    
 
     //encbuf[esize-1] = '\0';
     //printf("buffer: %s\n", encbuf);
