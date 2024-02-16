@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
     rewind(fe);
     
     fseek(fe, 0, SEEK_END);
-    int filesize = (int)ftell(fe);
+    unsigned int filesize = (int)ftell(fe);
 
     if(filesize<4){
         fprintf(stderr,"Error: file is not the correct size.\n");
@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
     
     //printf("size: %d\n", esize);
     rewind(fe);
-    int charsize = 0;
+    unsigned int charsize = 0;
     if(esize % 8 != 0){
         charsize = (esize/8)+1;
     }
@@ -275,7 +275,13 @@ int main(int argc, char *argv[]) {
     char *encbuf = malloc(charsize * sizeof(char));
     fread(encbuf, sizeof(char), charsize, fe);
 
-    
+    filesize = 0;
+    filesize = (int)ftell(fe);
+
+    if (filesize != charsize){
+        fprintf(stderr,"Error: Total bits = %d, but file's size is %d\n", esize, filesize);
+        exit(1);
+    }
 
     //encbuf[esize-1] = '\0';
     //printf("buffer: %s\n", encbuf);
@@ -298,7 +304,7 @@ int main(int argc, char *argv[]) {
     printf("$$$$$$$$$$$$$$$$$$$$$$$\n");
 */   
     //for (unsigned int k = 0; k < strlen(encbuf); k++){
-    for (int k = 0; k < charsize; k++){
+    for (unsigned int k = 0; k < charsize; k++){
         if(esize == 0){
             break;
         }
