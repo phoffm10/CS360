@@ -21,7 +21,6 @@ set compilation flags if needed -- should i switch to a dllist of structs?
 write command building function
 */
 
-//why doesnt fmakefile check work
 //perror
 //valgrind errors on command functions
 
@@ -31,17 +30,6 @@ write command building function
 
 // take all object files and headers that are compiles and concatenate to final executable
 // best way to determine flags and necessary actions
-
-// using stat()
-// int time = stat(f1.c);
-
-//check if file exists
-// if (file_exists(av[1])){
-//     printf("%s exists\n", av[1]);
-// }
-// else{
-//     printf("%s does not exist\n", av[1]);
-// }
 
 // sprintf(cmd, "prints to a string cmd");
 // system(cmd)==0;
@@ -54,7 +42,7 @@ char* compiling_command(char *cfile, Dllist flags){
     dll_traverse(tmp, flags) {
         length += strlen(tmp->val.s) + 1;  // +1 for space separator
     }
-    char* cmd = (char*)malloc(length);
+    char* cmd = (char*)malloc(length * 10);
     
     strcpy(cmd, cmd_base);
     dll_traverse(tmp, flags){
@@ -101,12 +89,12 @@ char* exec_command(Dllist ofiles, Dllist flags, Dllist libraries, char *exec){
 
 
 bool first_arg_newer(char *cfile, char *ofile){
-    struct stat cfile_stat;
+    struct stat cfile_stat = {0};
     stat(cfile, &cfile_stat);
     long cfile_mod_time = cfile_stat.st_mtime;
 
     // Do same thing for o file
-    struct stat ofile_stat;
+    struct stat ofile_stat = {0};
     stat(ofile, &ofile_stat);
     long ofile_mod_time = ofile_stat.st_mtime;
 
@@ -134,7 +122,7 @@ int main(int argc, char *argv[]){
     IS is;
     int i;
     char *temp;
-    char *exec;
+    char *exec = NULL;
     bool new_exec = false;
 
     // storing lists
@@ -151,23 +139,31 @@ int main(int argc, char *argv[]){
     flags = new_dllist();
     libraries = new_dllist();
 
-    int trash = argc;
-    trash += 1;
+    // int trash = argc;
+    // trash += 1;
 
-    is = new_inputstruct(argv[1]);
+    // is = new_inputstruct(argv[1]);
+    // is = new_inputstruct(argc > 1? argv[1] : "fmakefile");
+    char *fmakefile = argc > 1? argv[1] : "fmakefile";
+    if (file_exists(fmakefile)) {
+        is = new_inputstruct(fmakefile);
+    } else {
+        fprintf(stderr, "Input file doesn't exist\n");
+        return 1;
+    }
 
     // doesnt work------------------------------
-    if (is == NULL)
-    {
-        is = new_inputstruct("fmakefile");
-        printf("foundfile");
-        if (is == NULL)
-        {
-            printf("error\n");
-        }
-        // search for fmakefile
-        // if not found, error out
-    }
+    // if (is == NULL)
+    // {
+    //     is = new_inputstruct("fmakefile");
+    //     printf("foundfile");
+    //     if (is == NULL)
+    //     {
+    //         printf("error\n");
+    //     }
+    //     // search for fmakefile
+    //     // if not found, error out
+    // }
     //---------------------------------------------
 
     while (get_line(is) >= 0){
@@ -192,7 +188,11 @@ int main(int argc, char *argv[]){
         }
         else if (strcmp(temp, "E") == 0)
         {
-            exec = strdup(is->fields[1]);
+            if(exec != NULL){
+                fprintf(stderr, "fmakefile (%d) cannot have more than one E line\n", is->line);
+                exit(1);
+            }
+            exec = strdup(is->fields[1]);            
         }
         else if (strcmp(temp, "F") == 0)
         {
@@ -219,6 +219,13 @@ int main(int argc, char *argv[]){
         free(temp);
     }
 
+    if(exec == NULL){
+        fprintf(stderr, "No executable specified\n");
+        exit(1);
+    }
+
+
+/*
     //testing to print out dll contents
     printf("DLL-------------------\n");
 
@@ -240,6 +247,8 @@ int main(int argc, char *argv[]){
     print_dll(libraries);
 
     printf("DLL-------------------\n");
+*/
+
 
     //checks if c files exist
     dll_traverse(tmp, cfiles){
@@ -247,7 +256,7 @@ int main(int argc, char *argv[]){
             continue;
         }
         else{
-            fprintf(stderr,"%s doesnt exist\n", tmp->val.s);
+            fprintf(stderr,"fmakefile: %s: No such file or directory\n", tmp->val.s);
             exit(1);
         }
     }
@@ -257,7 +266,7 @@ int main(int argc, char *argv[]){
             continue;
         }
         else{
-            fprintf(stderr,"%s doesnt exist\n", tmp->val.s);
+            fprintf(stderr,"fmakefile: %s: No such file or directory\n", tmp->val.s);
             exit(1);
         }
     }
@@ -273,8 +282,13 @@ int main(int argc, char *argv[]){
                 //returns 0 for c files that corresponds to o file
                 if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                     new_exec = true;
-                    printf("%s\n", compiling_command(tmp2->val.s, flags));
-                    system(compiling_command(tmp2->val.s, flags));
+                    char *cmd = compiling_command(tmp2->val.s, flags);
+                    printf("%s\n", cmd);
+                    if(system(cmd) != 0){
+                        fprintf(stderr, "Command failed.  Exiting\n");
+                        exit(1);
+                    }
+                    free(cmd);
                 }
             }
         }
@@ -288,8 +302,15 @@ int main(int argc, char *argv[]){
             if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                 if(first_arg_newer(tmp->val.s, tmp2->val.s)){
                     new_exec = true;
-                    printf("%s\n", compiling_command(tmp->val.s, flags));
-                    system(compiling_command(tmp->val.s, flags));
+                    // printf("%s\n", compiling_command(tmp->val.s, flags));
+                    // system(compiling_command(tmp->val.s, flags));
+                    char *cmd = compiling_command(tmp->val.s, flags);
+                    printf("%s\n", cmd);
+                    if(system(cmd) != 0){
+                        fprintf(stderr, "Command failed.  Exiting\n");
+                        exit(1);
+                    }
+                    free(cmd);
                 }
             }
         }
@@ -303,8 +324,15 @@ int main(int argc, char *argv[]){
                 dll_traverse(tmp3, cfiles){
                     if(strncmp(tmp3->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                         new_exec = true;
-                        printf("%s\n", compiling_command(tmp3->val.s, flags));
-                        system(compiling_command(tmp3->val.s, flags));
+                        // printf("%s\n", compiling_command(tmp3->val.s, flags));
+                        // system(compiling_command(tmp3->val.s, flags));
+                        char *cmd = compiling_command(tmp3->val.s, flags);
+                        printf("%s\n", cmd);
+                        if(system(cmd) != 0){
+                            fprintf(stderr, "Command failed.  Exiting\n");
+                            exit(1);
+                        }
+                        free(cmd);
                     }
                 }
             }
@@ -326,8 +354,15 @@ int main(int argc, char *argv[]){
 
     //checking if executable should run
     if(new_exec == true){
-        printf("%s\n", exec_command(ofiles, flags, libraries, exec));
-        system(exec_command(ofiles, flags, libraries, exec));
+        // printf("%s\n", exec_command(ofiles, flags, libraries, exec));
+        // system(exec_command(ofiles, flags, libraries, exec));
+        char *cmd = exec_command(ofiles, flags, libraries, exec);
+        printf("%s\n", cmd);
+        if(system(cmd) != 0){
+            fprintf(stderr, "Command failed.  Fakemake exiting\n");
+            exit(1);
+        }
+        free(cmd);
     }
     else{
         printf("%s up to date\n", exec);
