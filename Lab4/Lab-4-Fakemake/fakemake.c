@@ -107,6 +107,16 @@ bool file_exists(char *filename){
     return (stat(filename, &buffer) == 0);
 }
 
+bool contains(Dllist list, char *filename){
+    Dllist tmp;
+    dll_traverse(tmp, list){
+        if(strcmp(filename, tmp->val.s) == 0){
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void print_dll(Dllist list){
     Dllist tmp;
     dll_traverse(tmp, list)
@@ -131,6 +141,7 @@ int main(int argc, char *argv[]){
     Dllist hfiles;
     Dllist flags;
     Dllist libraries;
+    Dllist to_compile;
     Dllist tmp, tmp2, tmp3;
 
     cfiles = new_dllist();
@@ -138,6 +149,7 @@ int main(int argc, char *argv[]){
     hfiles = new_dllist();
     flags = new_dllist();
     libraries = new_dllist();
+    to_compile = new_dllist();
 
     // int trash = argc;
     // trash += 1;
@@ -282,13 +294,17 @@ int main(int argc, char *argv[]){
                 //returns 0 for c files that corresponds to o file
                 if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                     new_exec = true;
-                    char *cmd = compiling_command(tmp2->val.s, flags);
-                    printf("%s\n", cmd);
-                    if(system(cmd) != 0){
-                        fprintf(stderr, "Command failed.  Exiting\n");
-                        exit(1);
+                    if(contains(to_compile, tmp2->val.s) == 0){
+                        dll_append(to_compile, new_jval_s(tmp2->val.s));
                     }
-                    free(cmd);
+
+                    // char *cmd = compiling_command(tmp2->val.s, flags);
+                    // printf("%s\n", cmd);
+                    // if(system(cmd) != 0){
+                    //     fprintf(stderr, "Command failed.  Exiting\n");
+                    //     exit(1);
+                    // }
+                    // free(cmd);
                 }
             }
         }
@@ -302,15 +318,20 @@ int main(int argc, char *argv[]){
             if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                 if(first_arg_newer(tmp->val.s, tmp2->val.s)){
                     new_exec = true;
+
+                    if(contains(to_compile, tmp->val.s) == 0){
+                        dll_append(to_compile, new_jval_s(tmp->val.s));
+                    }
+                    
                     // printf("%s\n", compiling_command(tmp->val.s, flags));
                     // system(compiling_command(tmp->val.s, flags));
-                    char *cmd = compiling_command(tmp->val.s, flags);
-                    printf("%s\n", cmd);
-                    if(system(cmd) != 0){
-                        fprintf(stderr, "Command failed.  Exiting\n");
-                        exit(1);
-                    }
-                    free(cmd);
+                    // char *cmd = compiling_command(tmp->val.s, flags);
+                    // printf("%s\n", cmd);
+                    // if(system(cmd) != 0){
+                    //     fprintf(stderr, "Command failed.  Exiting\n");
+                    //     exit(1);
+                    // }
+                    // free(cmd);
                 }
             }
         }
@@ -326,18 +347,40 @@ int main(int argc, char *argv[]){
                         new_exec = true;
                         // printf("%s\n", compiling_command(tmp3->val.s, flags));
                         // system(compiling_command(tmp3->val.s, flags));
-                        char *cmd = compiling_command(tmp3->val.s, flags);
-                        printf("%s\n", cmd);
-                        if(system(cmd) != 0){
-                            fprintf(stderr, "Command failed.  Exiting\n");
-                            exit(1);
+                        if(contains(to_compile, tmp3->val.s) == 0){
+                            dll_append(to_compile, new_jval_s(tmp3->val.s));
                         }
-                        free(cmd);
+
+                        // char *cmd = compiling_command(tmp3->val.s, flags);
+                        // printf("%s\n", cmd);
+                        // if(system(cmd) != 0){
+                        //     fprintf(stderr, "Command failed.  Exiting\n");
+                        //     exit(1);
+                        // }
+                        // free(cmd);
                     }
                 }
             }
         }
     }
+
+//printf("---------------------------\n");
+
+    dll_traverse(tmp, cfiles){
+        dll_traverse(tmp2, to_compile){
+            if(strcmp(tmp->val.s, tmp2->val.s) == 0){
+                char *cmd = compiling_command(tmp->val.s, flags);
+                printf("%s\n", cmd);
+                if(system(cmd) != 0){
+                    fprintf(stderr, "Command failed.  Exiting\n");
+                    exit(1);
+                }
+                free(cmd);
+            }
+        }
+    }
+//printf("---------------------------\n");
+
 
     //if executable doesnt exist
     if(file_exists(exec) == 0){
