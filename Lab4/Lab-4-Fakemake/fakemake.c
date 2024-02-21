@@ -13,27 +13,6 @@
 
 void print_dll(Dllist list);
 
-/*
-TODO
-traverse hfiles and check times and existence
-traverse cfiles and check times and existence
-set compilation flags if needed -- should i switch to a dllist of structs?
-write command building function
-*/
-
-//perror
-//valgrind errors on command functions
-
-//-------NOTES---------
-// how do i compile into a single executable?
-// gcc -c test.c
-
-// take all object files and headers that are compiles and concatenate to final executable
-// best way to determine flags and necessary actions
-
-// sprintf(cmd, "prints to a string cmd");
-// system(cmd)==0;
-//-------------------------------------------
 char* compiling_command(char *cfile, Dllist flags){
     
     Dllist tmp;
@@ -126,8 +105,6 @@ void print_dll(Dllist list){
     printf("\n");
 }
 
-
-
 int main(int argc, char *argv[]){
     IS is;
     int i;
@@ -151,11 +128,6 @@ int main(int argc, char *argv[]){
     libraries = new_dllist();
     to_compile = new_dllist();
 
-    // int trash = argc;
-    // trash += 1;
-
-    // is = new_inputstruct(argv[1]);
-    // is = new_inputstruct(argc > 1? argv[1] : "fmakefile");
     char *fmakefile = argc > 1? argv[1] : "fmakefile";
     if (file_exists(fmakefile)) {
         is = new_inputstruct(fmakefile);
@@ -163,20 +135,6 @@ int main(int argc, char *argv[]){
         fprintf(stderr, "Input file doesn't exist\n");
         return 1;
     }
-
-    // doesnt work------------------------------
-    // if (is == NULL)
-    // {
-    //     is = new_inputstruct("fmakefile");
-    //     printf("foundfile");
-    //     if (is == NULL)
-    //     {
-    //         printf("error\n");
-    //     }
-    //     // search for fmakefile
-    //     // if not found, error out
-    // }
-    //---------------------------------------------
 
     while (get_line(is) >= 0){
 
@@ -236,42 +194,6 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-
-/*
-    //testing to print out dll contents
-    printf("DLL-------------------\n");
-
-    printf("C files: ");
-    print_dll(cfiles);
-
-    printf("O files: ");
-    print_dll(ofiles);
-
-    printf("H files: ");
-    print_dll(hfiles);
-
-    printf("Executable: %s\n", exec);
-
-    printf("Flags: ");
-    print_dll(flags);
-
-    printf("Libraries: ");
-    print_dll(libraries);
-
-    printf("DLL-------------------\n");
-*/
-
-
-    //checks if c files exist
-    dll_traverse(tmp, cfiles){
-        if (file_exists(tmp->val.s)){
-            continue;
-        }
-        else{
-            fprintf(stderr,"fmakefile: %s: No such file or directory\n", tmp->val.s);
-            exit(1);
-        }
-    }
     //check if h files exist
     dll_traverse(tmp, hfiles){
         if (file_exists(tmp->val.s)){
@@ -297,14 +219,6 @@ int main(int argc, char *argv[]){
                     if(contains(to_compile, tmp2->val.s) == 0){
                         dll_append(to_compile, new_jval_s(tmp2->val.s));
                     }
-
-                    // char *cmd = compiling_command(tmp2->val.s, flags);
-                    // printf("%s\n", cmd);
-                    // if(system(cmd) != 0){
-                    //     fprintf(stderr, "Command failed.  Exiting\n");
-                    //     exit(1);
-                    // }
-                    // free(cmd);
                 }
             }
         }
@@ -322,16 +236,6 @@ int main(int argc, char *argv[]){
                     if(contains(to_compile, tmp->val.s) == 0){
                         dll_append(to_compile, new_jval_s(tmp->val.s));
                     }
-                    
-                    // printf("%s\n", compiling_command(tmp->val.s, flags));
-                    // system(compiling_command(tmp->val.s, flags));
-                    // char *cmd = compiling_command(tmp->val.s, flags);
-                    // printf("%s\n", cmd);
-                    // if(system(cmd) != 0){
-                    //     fprintf(stderr, "Command failed.  Exiting\n");
-                    //     exit(1);
-                    // }
-                    // free(cmd);
                 }
             }
         }
@@ -345,42 +249,34 @@ int main(int argc, char *argv[]){
                 dll_traverse(tmp3, cfiles){
                     if(strncmp(tmp3->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                         new_exec = true;
-                        // printf("%s\n", compiling_command(tmp3->val.s, flags));
-                        // system(compiling_command(tmp3->val.s, flags));
                         if(contains(to_compile, tmp3->val.s) == 0){
                             dll_append(to_compile, new_jval_s(tmp3->val.s));
                         }
-
-                        // char *cmd = compiling_command(tmp3->val.s, flags);
-                        // printf("%s\n", cmd);
-                        // if(system(cmd) != 0){
-                        //     fprintf(stderr, "Command failed.  Exiting\n");
-                        //     exit(1);
-                        // }
-                        // free(cmd);
                     }
                 }
             }
         }
     }
 
-//printf("---------------------------\n");
-
     dll_traverse(tmp, cfiles){
         dll_traverse(tmp2, to_compile){
             if(strcmp(tmp->val.s, tmp2->val.s) == 0){
-                char *cmd = compiling_command(tmp->val.s, flags);
-                printf("%s\n", cmd);
-                if(system(cmd) != 0){
-                    fprintf(stderr, "Command failed.  Exiting\n");
+                if (file_exists(tmp->val.s)){
+                    char *cmd = compiling_command(tmp->val.s, flags);
+                    printf("%s\n", cmd);
+                    if(system(cmd) != 0){
+                        fprintf(stderr, "Command failed.  Exiting\n");
+                        exit(1);
+                    }
+                    free(cmd);
+                }
+                else{
+                    fprintf(stderr,"fmakefile: %s: No such file or directory\n", tmp->val.s);
                     exit(1);
                 }
-                free(cmd);
             }
         }
     }
-//printf("---------------------------\n");
-
 
     //if executable doesnt exist
     if(file_exists(exec) == 0){
@@ -394,11 +290,8 @@ int main(int argc, char *argv[]){
         }
     }
 
-
     //checking if executable should run
     if(new_exec == true){
-        // printf("%s\n", exec_command(ofiles, flags, libraries, exec));
-        // system(exec_command(ofiles, flags, libraries, exec));
         char *cmd = exec_command(ofiles, flags, libraries, exec);
         printf("%s\n", cmd);
         if(system(cmd) != 0){
@@ -410,41 +303,42 @@ int main(int argc, char *argv[]){
     else{
         printf("%s up to date\n", exec);
     }
-    
-    
-    /*
-    //testing command creation
-    dll_traverse(tmp, cfiles){
-        printf("%s\n", compiling_command(tmp->val.s, flags));
-        
-    }
-    //everything must be compiled before running the the exec function
-    printf("%s\n", exec_command(ofiles, flags, libraries, exec));
-    */
 
     //freeing memory 
     free(exec);
     jettison_inputstruct(is);
     dll_traverse(tmp, cfiles) {
-        free(tmp->val.s);
+        if(tmp->val.s != NULL){
+            free(tmp->val.s);
+        }
     }
     dll_traverse(tmp, ofiles) {
-        free(tmp->val.s);
+        if(tmp->val.s != NULL){
+            free(tmp->val.s);
+        }
     }
     dll_traverse(tmp, hfiles) {
-        free(tmp->val.s);
+        if(tmp->val.s != NULL){
+            free(tmp->val.s);
+        }
     }
     dll_traverse(tmp, flags) {
-        free(tmp->val.s);
+        if(tmp->val.s != NULL){
+            free(tmp->val.s);
+        }
     }
     dll_traverse(tmp, libraries) {
-        free(tmp->val.s);
+        if(tmp->val.s != NULL){
+            free(tmp->val.s);
+        }
     }
+    
     free_dllist(cfiles);
     free_dllist(ofiles);
     free_dllist(hfiles);
     free_dllist(flags);
     free_dllist(libraries);
+    free_dllist(to_compile);
 
     return 0;
 }
