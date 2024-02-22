@@ -11,10 +11,16 @@
 #include "fields.h"
 #include "dllist.h"
 
+//Forward declarations
+char* compiling_command(char *cfile, Dllist flags);
+char* exec_command(Dllist ofiles, Dllist flags, Dllist libraries, char *exec);
+bool first_arg_newer(char *cfile, char *ofile);
+bool file_exists(char *filename);
+bool contains(Dllist list, char *filename);
 void print_dll(Dllist list);
 
-char* compiling_command(char *cfile, Dllist flags){
-    
+//Builds compilation command and returns char*
+char* compiling_command(char *cfile, Dllist flags){    
     Dllist tmp;
     char* cmd_base = "gcc -c";
     int length = strlen(cmd_base) + strlen(cfile) + 1;  // +1 for null terminator
@@ -33,8 +39,8 @@ char* compiling_command(char *cfile, Dllist flags){
     return cmd;
 }
 
-char* exec_command(Dllist ofiles, Dllist flags, Dllist libraries, char *exec){
-    
+//Builds executable command and returns char*
+char* exec_command(Dllist ofiles, Dllist flags, Dllist libraries, char *exec){    
     Dllist tmp;
     char* cmd_base = "gcc -o ";
     int length = strlen(cmd_base) + strlen(exec) + 1;  // +1 for null terminator
@@ -66,26 +72,29 @@ char* exec_command(Dllist ofiles, Dllist flags, Dllist libraries, char *exec){
     return cmd;
 }
 
-
+//Checks modification time between two files
 bool first_arg_newer(char *cfile, char *ofile){
+    //Stores mod time of cfile
     struct stat cfile_stat = {0};
     stat(cfile, &cfile_stat);
     long cfile_mod_time = cfile_stat.st_mtime;
 
-    // Do same thing for o file
+    //Stores mod time of ofile
     struct stat ofile_stat = {0};
     stat(ofile, &ofile_stat);
     long ofile_mod_time = ofile_stat.st_mtime;
 
-    // Is the cfile more recent?
+    //Returns 1 if cfile more recent
     return cfile_mod_time > ofile_mod_time;
 }
 
+//Check if file exists in current directory
 bool file_exists(char *filename){
     struct stat buffer;
     return (stat(filename, &buffer) == 0);
 }
 
+//Checks if dllist contains filename
 bool contains(Dllist list, char *filename){
     Dllist tmp;
     dll_traverse(tmp, list){
@@ -96,6 +105,7 @@ bool contains(Dllist list, char *filename){
     return 0;
 }
 
+//Prints given dllist
 void print_dll(Dllist list){
     Dllist tmp;
     dll_traverse(tmp, list)
@@ -112,7 +122,7 @@ int main(int argc, char *argv[]){
     char *exec = NULL;
     bool new_exec = false;
 
-    // storing lists
+    //Dllists for storing filenames
     Dllist cfiles;
     Dllist ofiles;
     Dllist hfiles;
@@ -128,14 +138,17 @@ int main(int argc, char *argv[]){
     libraries = new_dllist();
     to_compile = new_dllist();
 
+    //Checks if argv[1] exists and if not that fmakefile exists
     char *fmakefile = argc > 1? argv[1] : "fmakefile";
     if (file_exists(fmakefile)) {
         is = new_inputstruct(fmakefile);
     } else {
+        //If neither exists, throws error
         fprintf(stderr, "Input file doesn't exist\n");
         return 1;
     }
 
+    //Reading data from input file
     while (get_line(is) >= 0){
 
         if (is->NF == 0) continue;
@@ -189,12 +202,13 @@ int main(int argc, char *argv[]){
         free(temp);
     }
 
+    //Check if executable name has been specified
     if(exec == NULL){
         fprintf(stderr, "No executable specified\n");
         exit(1);
     }
 
-    //check if h files exist
+    //Check if h files exist
     dll_traverse(tmp, hfiles){
         if (file_exists(tmp->val.s)){
             continue;
@@ -205,15 +219,14 @@ int main(int argc, char *argv[]){
         }
     }
 
-    //if the .o files doesnt exist, compile c file
+    //Checks if the .o files doesnt exist and compiles c files if so
     dll_traverse(tmp, ofiles){
         if (file_exists(tmp->val.s)){
             continue;
         }
         else{
-            //compile c files with missing .o files
             dll_traverse(tmp2, cfiles){
-                //returns 0 for c files that corresponds to o file
+                //Appends corresponding c file to to_compile dllist
                 if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                     new_exec = true;
                     if(contains(to_compile, tmp2->val.s) == 0){
@@ -224,11 +237,10 @@ int main(int argc, char *argv[]){
         }
     }
 
-    //if c file more recent than o, recompile c
+    //Checks if c file more recent than o, recompiles c if needed
     dll_traverse(tmp, cfiles){
-        //compile c files with missing .o files
         dll_traverse(tmp2, ofiles){
-            //returns 0 for c files that corresponds to o file
+            //Appends corresponding c file to to_compile dllist
             if(strncmp(tmp2->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                 if(first_arg_newer(tmp->val.s, tmp2->val.s)){
                     new_exec = true;
@@ -241,11 +253,11 @@ int main(int argc, char *argv[]){
         }
     }
     
-    //if h files are more recent than .o files
+    //Checks if h files are more recent than .o files
     dll_traverse(tmp, ofiles){
         dll_traverse(tmp2, hfiles){
             if(first_arg_newer(tmp2->val.s, tmp->val.s)){
-                //compile corresponding c file
+                //Appends corresponding c file to to_compile dllist
                 dll_traverse(tmp3, cfiles){
                     if(strncmp(tmp3->val.s, tmp->val.s, strlen(tmp->val.s)-1) == 0){
                         new_exec = true;
@@ -258,6 +270,7 @@ int main(int argc, char *argv[]){
         }
     }
 
+    //Traverses to_compile dllist and compiles c files in order
     dll_traverse(tmp, cfiles){
         dll_traverse(tmp2, to_compile){
             if(strcmp(tmp->val.s, tmp2->val.s) == 0){
@@ -278,19 +291,19 @@ int main(int argc, char *argv[]){
         }
     }
 
-    //if executable doesnt exist
+    //Checks if executable doesnt exist
     if(file_exists(exec) == 0){
         new_exec = true;
     }
 
-    //if executable is less recent than o files
+    //Checks if executable is less recent than o files
     dll_traverse(tmp, ofiles){
         if(first_arg_newer(tmp->val.s, exec)){
             new_exec = true;
         }
     }
 
-    //checking if executable should run
+    //Checking if executable command should run
     if(new_exec == true){
         char *cmd = exec_command(ofiles, flags, libraries, exec);
         printf("%s\n", cmd);
@@ -304,7 +317,7 @@ int main(int argc, char *argv[]){
         printf("%s up to date\n", exec);
     }
 
-    //freeing memory 
+    //Freeing memory 
     free(exec);
     jettison_inputstruct(is);
     dll_traverse(tmp, cfiles) {
