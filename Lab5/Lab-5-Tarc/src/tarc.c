@@ -36,6 +36,18 @@ int file_mode(char *filename);
 long file_mod_time(char *filename);
 char *file_bytes(char *filename);
 
+typedef struct filestruct{
+    char* path;
+    char* name;
+    char* bytes;
+    int name_size;
+    int mode;
+    long inode;
+    long mod_time;
+    long size;    
+    bool seen;
+} filestruct;
+
 bool is_this_dir(char *filename)
 {
   //struct dirent *de;
@@ -155,6 +167,12 @@ void* traverse(char* dir){
   struct stat fbuf;
   int exists;
   char *file;
+  bool seen = false;
+
+  Dllist inodes;
+  Dllist tmp;
+
+  inodes = new_dllist();
 
   d = opendir(dir);
   if (d == NULL)
@@ -165,9 +183,11 @@ void* traverse(char* dir){
 
   for (de = readdir(d); de != NULL; de = readdir(d))
   {
+    if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
     // need to build name with prefix
     file = prefix(dir, de->d_name);
     //printf("path: %s\n", file);
+    seen = false;
 
     exists = stat(file, &fbuf);
     if (exists < 0)
@@ -176,22 +196,51 @@ void* traverse(char* dir){
     }
     else
     {
-      if (is_this_dir(file) == true )
-      {
-        //if its a directory, traverse directory
-        if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-        printf("%s is a directory\n", file);
-        traverse(file);
+      printf("Namesize: %d\n", (int)strlen(file));
+      printf("Name: %s\n", file);
+      printf("Inode: %ld\n", file_inode(file));
+
+      //inode check not working
+      dll_traverse(tmp, inodes){
+        //if seen, set seen to true
+        if(file_inode(file) == tmp->val.l){
+          printf("seen");
+          seen = true;
+        }
+        //if not seen, add inode to list
+        else{
+          dll_append(inodes, new_jval_l(file_inode(file)));
+        }
       }
-      else
-      {//is a file, use file logic
-        printf("%s is not directory\n", file);
-        printf("%s namesize is: %d\n", file, strlen(file));
-        printf("%s size is: %d\n", file, file_size(file));
-        printf("%s inode # is: %ld\n", file, file_inode(file));
-        printf("%s mode is: %0x\n", file, file_mode(file));
-        printf("%s mod time is: %ld\n", file, file_mod_time(file));
-        printf("%s bytes are: %s\n", file, file_bytes(file));
+      printf("------------\n");
+      dll_traverse(tmp, inodes){
+        printf("%ld", tmp->val.l);
+      }
+      printf("------------\n");
+
+      if(seen == false){
+        printf("Mode: %d\n", file_mode(file));
+        printf("Modification time: %ld\n", file_mod_time(file));
+        if (is_this_dir(file) == true )
+        {
+          //if its a directory, traverse directory
+          if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+          //printf("%s is a directory\n", file);
+          printf("\n");
+          traverse(file);
+        }
+        else
+        {//is a file, use file logic to display things
+          printf("Size: %ld\n", file_size(file));
+          printf("Bytes: %s\n", file_bytes(file));
+          // printf("%s is not directory\n", file);
+          // printf("%s namesize is: %d\n", file, strlen(file));
+          // printf("%s size is: %d\n", file, file_size(file));
+          // printf("%s inode # is: %ld\n", file, file_inode(file));
+          // printf("%s mode is: %0x\n", file, file_mode(file));
+          // printf("%s mod time is: %ld\n", file, file_mod_time(file));
+          // printf("%s bytes are: %s\n", file, file_bytes(file));
+        }
       }
     }
   }
@@ -199,10 +248,14 @@ void* traverse(char* dir){
 
 int main(int argc, char *argv[])
 {
-  Dllist inodes;
-  Dllist tmp;
+  //parent dir info
+  printf("Namesize: %d\n", (int)strlen(argv[1]));
+  printf("Name: %s\n", argv[1]);
+  printf("Inode: %ld\n", file_inode(argv[1]));
+  printf("Mode: %d\n", file_mode(argv[1]));
+  printf("Modification time: %ld\n", file_mod_time(argv[1]));
+  printf("\n");
 
-  inodes = new_dllist();
   traverse(argv[1]);
 
   return 0;
