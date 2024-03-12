@@ -10,23 +10,9 @@
 #include "fields.h"
 #include "dllist.h"
 
-// how do i print in little endian?
-// use fwrite too stdout for little endian
-
 /*
 TODO
-//functions
-$DONE$filename - is this a dir
-$DONE$filename - returns filesize (for files only)
-$DONE$filename - gives inodes
-$DONE$filename - returns mode
-$DONE$filename - retuens modified time
-$DONE$filename - returns file contents
-
-logic//
-takes array of inodes, check if inode is processed
-
-main tarc builder
+correct names for recursive dir calls
 
 */
 bool is_this_dir(char *filename);
@@ -35,6 +21,15 @@ long file_inode(char *filename);
 int file_mode(char *filename);
 long file_mod_time(char *filename);
 char *file_bytes(char *filename);
+
+Dllist inodes;
+Dllist dirs;
+Dllist tmp;
+
+typedef struct rdir{
+    char* path;
+    char* name;
+} rdir;
 
 char* dir_name(char* pathname){
   //find index of final /
@@ -50,6 +45,7 @@ char* dir_name(char* pathname){
   if(index != 0){
     dirn = (char*)malloc((pathsize-index)+1);
     memcpy(dirn, pathname+index, pathsize-index);
+    dirn[pathsize - index] = '\0';
     return dirn;
   }
   else{
@@ -150,6 +146,7 @@ char *file_bytes(char *filename)
   c = (char *)malloc((bufsize + 1) * sizeof(char));
   fread(c, 1, bufsize, fp);
   c[bufsize] = '\0';
+  fclose(fp);
 
   return c;
 }
@@ -170,7 +167,7 @@ char *prefix(char *basedir, char *filename)
   return path;
 }
 
-void* traverse(char* dir){
+void* traverse(char* dirname, char* dir){
   DIR *d;
   struct dirent *de;
   struct stat fbuf;
@@ -179,8 +176,9 @@ void* traverse(char* dir){
   char* displayname;
   bool seen = false;
 
-  Dllist inodes;
-  Dllist tmp;
+  // Dllist inodes;
+  // Dllist dirs;
+  // Dllist tmp;
 
   inodes = new_dllist();
 
@@ -191,7 +189,7 @@ void* traverse(char* dir){
     exit(1);
   }
 
-  char* nopathdir = dir_name(dir);
+  //char* nopathdir = dir_name(dir);
 /*
   long example_inode;
   fwrite(&example_inode, sizeof(example_inode), 1, stdout);
@@ -207,7 +205,7 @@ void* traverse(char* dir){
     if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
     // need to build name with prefix
     file = prefix(dir, de->d_name);
-    displayname = prefix(nopathdir, de->d_name);
+    displayname = prefix(dirname, de->d_name);
     //printf("path: %s\n", file);
     seen = false;
 
@@ -260,11 +258,13 @@ void* traverse(char* dir){
         // printf("Modification time: %ld\n", file_mod_time(file));
         if (is_this_dir(file) == true )
         {
-          //if its a directory, traverse directory
-          //if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-          //printf("%s is a directory\n", file);
-          printf("\n");
-          traverse(file);
+          //if its a directory, store directory to traverse 
+          // rdir *_dir_ = malloc(sizeof(rdir));
+          // _dir_->name = strdup(displayname);
+          // _dir_->path = strdup(file);
+          // dll_append(dirs, new_jval_v((void *)_dir_));
+
+          traverse(displayname, file);
         }
         else
         {//is a file, use file logic to display things
@@ -326,7 +326,13 @@ int main(int argc, char *argv[])
   // printf("Modification time: %ld\n", file_mod_time(argv[1]));
   // printf("\n");
 
-  traverse(pathname);
+  traverse(parentdir, pathname);
+
+  // dll_traverse(tmp, dirs){
+  //   rdir* _dir_ = (rdir *)tmp->val.v;
+  //   traverse(_dir_->name, _dir_->path);
+
+  // }
 
   return 0;
 }
