@@ -13,8 +13,8 @@
 /*
 TODO
 correct names for recursive dir calls
-
 */
+
 bool is_this_dir(char *filename);
 long file_size(char *filename);
 long file_inode(char *filename);
@@ -25,6 +25,8 @@ char *file_bytes(char *filename);
 Dllist inodes;
 Dllist dirs;
 Dllist tmp;
+
+char* dpath = "";
 
 typedef struct rdir{
     char* path;
@@ -64,7 +66,6 @@ bool is_this_dir(char *filename)
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
-  //if (S_ISDIR(buf.st_mode) && strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0)
   if (S_ISDIR(buf.st_mode))
   {
     return true;
@@ -176,12 +177,6 @@ void* traverse(char* dirname, char* dir){
   char* displayname;
   bool seen = false;
 
-  // Dllist inodes;
-  // Dllist dirs;
-  // Dllist tmp;
-
-  inodes = new_dllist();
-
   d = opendir(dir);
   if (d == NULL)
   {
@@ -189,24 +184,12 @@ void* traverse(char* dirname, char* dir){
     exit(1);
   }
 
-  //char* nopathdir = dir_name(dir);
-/*
-  long example_inode;
-  fwrite(&example_inode, sizeof(example_inode), 1, stdout);
-
-  char *example_file_contents;
-  int file_size;
-
-  fwrite(example_file_contents, sizeof(char), file_size, stdout);
-*/
-
   for (de = readdir(d); de != NULL; de = readdir(d))
   {
     if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
     // need to build name with prefix
     file = prefix(dir, de->d_name);
     displayname = prefix(dirname, de->d_name);
-    //printf("path: %s\n", file);
     seen = false;
 
     exists = stat(file, &fbuf);
@@ -216,9 +199,7 @@ void* traverse(char* dirname, char* dir){
     }
     else
     {
-      //int fnamesize = (int)strlen(file);
       int fnamesize = (int)strlen(displayname);
-      //char* fname = file;
       char* fname = displayname;
       long finode = file_inode(file);
 
@@ -226,44 +207,26 @@ void* traverse(char* dirname, char* dir){
       fwrite(fname, sizeof(char), fnamesize, stdout);
       fwrite(&finode, sizeof(finode), 1, stdout);
 
-      // printf("Namesize: %d\n", (int)strlen(file));
-      // printf("Name: %s\n", file);
-      // printf("Inode: %ld\n", file_inode(file));
-
       dll_traverse(tmp, inodes){
         //if seen, set seen to true
         if(file_inode(file) == tmp->val.l){
-          printf("\n");
           seen = true;
         }
       }
       if (!seen) {
         dll_append(inodes, new_jval_l(file_inode(file)));
       }
-      /*
-      printf("------------\n");
-      dll_traverse(tmp, inodes){
-        printf("%ld", tmp->val.l);
-      }
-      printf("------------\n");
-      */
+
       if(seen == false){
         int fmode = file_mode(file);
         long fmodt = file_mod_time(file);
 
-
         fwrite(&fmode, sizeof(fmode), 1, stdout);
         fwrite(&fmodt, sizeof(fmodt), 1, stdout);
-        // printf("Mode: %d\n", file_mode(file));
-        // printf("Modification time: %ld\n", file_mod_time(file));
+
         if (is_this_dir(file) == true )
         {
           //if its a directory, store directory to traverse 
-          // rdir *_dir_ = malloc(sizeof(rdir));
-          // _dir_->name = strdup(displayname);
-          // _dir_->path = strdup(file);
-          // dll_append(dirs, new_jval_v((void *)_dir_));
-
           traverse(displayname, file);
         }
         else
@@ -274,17 +237,6 @@ void* traverse(char* dirname, char* dir){
           fwrite(&fsize, sizeof(fsize), 1, stdout);
           fwrite(output, sizeof(char), file_size(file), stdout);
 
-          // printf("Size: %ld\n", file_size(file));
-          // printf("Bytes: %s\n", file_bytes(file));
-          
-          // printf("%s is not directory\n", file);
-          // printf("%s namesize is: %d\n", file, strlen(file));
-          // printf("%s size is: %d\n", file, file_size(file));
-          // printf("%s inode # is: %ld\n", file, file_inode(file));
-          // printf("%s mode is: %0x\n", file, file_mode(file));
-          // printf("%s mod time is: %ld\n", file, file_mod_time(file));
-          // printf("%s bytes are: %s\n", file, file_bytes(file));
-
         }
       }
     }
@@ -294,16 +246,14 @@ void* traverse(char* dirname, char* dir){
 
 int main(int argc, char *argv[])
 {
-  //char* test = "/home/cs360/lab/lab5/directory";
-  //printf("test: %s", dir_name(test));
-  
+
+  inodes = new_dllist();
+  dirs = new_dllist();
   
   //need function to pull dir name only
   char* pathname = strdup(argv[1]);
   char* parentdir = NULL;
   parentdir = dir_name(argv[1]);
-  //printf("pathname :%s\n",pathname);
-  //printf("parentdir :%s\n",parentdir);
 
   int fnamesize = (int)strlen(parentdir);
   char* fname = parentdir;
@@ -317,22 +267,7 @@ int main(int argc, char *argv[])
   fwrite(&fmode, sizeof(fmode), 1, stdout);
   fwrite(&fmodt, sizeof(fmodt), 1, stdout);
 
-
-
-  //printf("Namesize: %d\n", (int)strlen(parentdir));
-  // printf("Name: %s\n", argv[1]);
-  // printf("Inode: %ld\n", file_inode(argv[1]));
-  // printf("Mode: %d\n", file_mode(argv[1]));
-  // printf("Modification time: %ld\n", file_mod_time(argv[1]));
-  // printf("\n");
-
   traverse(parentdir, pathname);
-
-  // dll_traverse(tmp, dirs){
-  //   rdir* _dir_ = (rdir *)tmp->val.v;
-  //   traverse(_dir_->name, _dir_->path);
-
-  // }
 
   return 0;
 }
