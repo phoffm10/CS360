@@ -10,28 +10,27 @@
 #include "fields.h"
 #include "dllist.h"
 
-/*
-TODO
-correct names for recursive dir calls
-*/
-
+char* dir_name(char* pathname);
+char* get_dir(char* path);
 bool is_this_dir(char *filename);
 long file_size(char *filename);
 long file_inode(char *filename);
 int file_mode(char *filename);
 long file_mod_time(char *filename);
 char *file_bytes(char *filename);
+char *prefix(char *basedir, char *filename);
+void* traverse(char* dir);
+
 
 Dllist inodes;
 Dllist dirs;
-Dllist tmp;
+Dllist printed;
+Dllist tmp, tmp2;
 
-char* dpath = "";
+//char* dpath = "";
+char* parentdir = NULL;
+bool isprinted = false;
 
-typedef struct rdir{
-    char* path;
-    char* name;
-} rdir;
 
 char* dir_name(char* pathname){
   //find index of final /
@@ -53,6 +52,31 @@ char* dir_name(char* pathname){
   else{
     return pathname;
   }
+}
+
+char* get_dir(char* path){
+  char* dir_name;
+  char* maindir = strdup(parentdir);
+
+  char* dir_position = strstr(path, maindir);
+  if (dir_position == NULL) {
+      // Directory not found in the full path
+      return NULL;
+  }
+
+  // Calculate the length of the subdirectory path
+  int dir_namesize = (int)strlen(dir_position);
+
+  // Allocate memory for the subdirectory path
+  dir_name = (char*)malloc(dir_namesize + 1);
+  if (dir_name == NULL) {
+      // Memory allocation failed
+      return NULL;
+  }
+  // Copy the subdirectory path into the allocated memory
+  strcpy(dir_name, dir_position);
+
+  return dir_name;
 }
 
 bool is_this_dir(char *filename)
@@ -168,12 +192,13 @@ char *prefix(char *basedir, char *filename)
   return path;
 }
 
-void* traverse(char* dirname, char* dir){
+void* traverse(char* dir){
   DIR *d;
   struct dirent *de;
   struct stat fbuf;
   int exists;
   char* file;
+  char* dirname;
   char* displayname;
   bool seen = false;
 
@@ -187,9 +212,10 @@ void* traverse(char* dirname, char* dir){
   for (de = readdir(d); de != NULL; de = readdir(d))
   {
     if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+    
     // need to build name with prefix
     file = prefix(dir, de->d_name);
-    displayname = prefix(dirname, de->d_name);
+    dirname = get_dir(file);
     seen = false;
 
     exists = stat(file, &fbuf);
@@ -199,8 +225,8 @@ void* traverse(char* dirname, char* dir){
     }
     else
     {
-      int fnamesize = (int)strlen(displayname);
-      char* fname = displayname;
+      int fnamesize = (int)strlen(dirname);
+      char* fname = dirname;
       long finode = file_inode(file);
 
       fwrite(&fnamesize, sizeof(fnamesize), 1, stdout);
@@ -227,7 +253,9 @@ void* traverse(char* dirname, char* dir){
         if (is_this_dir(file) == true )
         {
           //if its a directory, store directory to traverse 
-          traverse(displayname, file);
+          //traverse(file);
+          
+          dll_append(dirs, new_jval_s(strdup(file)));
         }
         else
         {//is a file, use file logic to display things
@@ -242,6 +270,19 @@ void* traverse(char* dirname, char* dir){
     }
   }
   closedir(d);
+
+  dll_rtraverse(tmp, dirs){
+    isprinted = false;
+    dll_traverse(tmp2, printed){
+      if(strcmp(tmp->val.s, tmp2->val.s) == 0){
+        isprinted = true;
+      }
+    }
+    if(!isprinted){
+      dll_append(printed, new_jval_s(strdup(tmp->val.s)));
+      traverse(tmp->val.s);
+    }
+  }
 }
 
 int main(int argc, char *argv[])
@@ -249,10 +290,11 @@ int main(int argc, char *argv[])
 
   inodes = new_dllist();
   dirs = new_dllist();
+  printed = new_dllist();
   
   //need function to pull dir name only
   char* pathname = strdup(argv[1]);
-  char* parentdir = NULL;
+  // char* parentdir = NULL;
   parentdir = dir_name(argv[1]);
 
   int fnamesize = (int)strlen(parentdir);
@@ -267,7 +309,7 @@ int main(int argc, char *argv[])
   fwrite(&fmode, sizeof(fmode), 1, stdout);
   fwrite(&fmodt, sizeof(fmodt), 1, stdout);
 
-  traverse(parentdir, pathname);
+  traverse(pathname);
 
   return 0;
 }
