@@ -1,4 +1,5 @@
 // Peter Hoffman
+//CS360 Lab 5
 #include <sys/stat.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -27,8 +28,10 @@ Dllist dirs;
 Dllist printed;
 Dllist tmp, tmp2;
 
-//char* dpath = "";
 char* parentdir = NULL;
+char* file;
+char* dirname;
+char* pathname;
 bool isprinted = false;
 
 
@@ -56,9 +59,9 @@ char* dir_name(char* pathname){
 
 char* get_dir(char* path){
   char* dir_name;
-  char* maindir = strdup(parentdir);
+  //char* maindir = strdup(parentdir);
 
-  char* dir_position = strstr(path, maindir);
+  char* dir_position = strstr(path, parentdir);
   if (dir_position == NULL) {
       // Directory not found in the full path
       return NULL;
@@ -81,7 +84,6 @@ char* get_dir(char* path){
 
 bool is_this_dir(char *filename)
 {
-  //struct dirent *de;
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
@@ -97,14 +99,12 @@ bool is_this_dir(char *filename)
   return false;
 }
 
-long file_size(char *filename)
-{
+long file_size(char *filename){
   long size;
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
-  if (exists < 0)
-  {
+  if (exists < 0){
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
@@ -112,14 +112,12 @@ long file_size(char *filename)
   return size;
 }
 
-long file_inode(char *filename)
-{
+long file_inode(char *filename){
   long inode;
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
-  if (exists < 0)
-  {
+  if (exists < 0){
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
@@ -127,14 +125,12 @@ long file_inode(char *filename)
   return inode;
 }
 
-int file_mode(char *filename)
-{
+int file_mode(char *filename){
   int mode;
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
-  if (exists < 0)
-  {
+  if (exists < 0){
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
@@ -142,24 +138,20 @@ int file_mode(char *filename)
   return mode;
 }
 
-long file_mod_time(char *filename)
-{
+long file_mod_time(char *filename){
   long mod_time;
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
-  if (exists < 0)
-  {
+  if (exists < 0){
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
-  // is this correct for seconds?
   mod_time = (long)buf.st_mtime;
   return mod_time;
 }
 
-char *file_bytes(char *filename)
-{
+char *file_bytes(char *filename){
   // should cat file
   FILE *fp;
   fp = fopen(filename, "rb");
@@ -176,15 +168,13 @@ char *file_bytes(char *filename)
   return c;
 }
 
-char *prefix(char *basedir, char *filename)
-{
+char *prefix(char *basedir, char *filename){
   // malloc length of both + extra char
   char *path;
-  path = (char *)malloc((strlen(basedir) + strlen(filename) + 150) * sizeof(char));
+  path = (char *)malloc((strlen(basedir) + strlen(filename) + 2) * sizeof(char));
   strcpy(path, basedir);
   // strcpy base dir into ptr
   strcat(path, "/");
-  // if it doesnt end add slash
   // strcat filename
   strcat(path, filename);
   path[strlen(path)] = '\0';
@@ -192,25 +182,56 @@ char *prefix(char *basedir, char *filename)
   return path;
 }
 
+void first_dir(char* arg){
+  pathname = strdup(arg);
+  parentdir = dir_name(arg);
+
+  int fnamesize = (int)strlen(parentdir);
+  char* fname = parentdir;
+  long finode = file_inode(pathname);
+  int fmode = file_mode(pathname);
+  long fmodt = file_mod_time(pathname);
+
+  fwrite(&fnamesize, sizeof(fnamesize), 1, stdout);
+  fwrite(fname, sizeof(char), fnamesize, stdout);
+  fwrite(&finode, sizeof(finode), 1, stdout);
+  fwrite(&fmode, sizeof(fmode), 1, stdout);
+  fwrite(&fmodt, sizeof(fmodt), 1, stdout);
+}
+
+void free_mem(){
+  free(pathname);
+  dll_traverse(tmp, dirs){
+    if(tmp->val.s != NULL){
+      free(tmp->val.s);
+    }
+  }
+  dll_traverse(tmp, printed){
+    if(tmp->val.s != NULL){
+      free(tmp->val.s);
+    }
+  }
+  free_dllist(inodes);
+  free_dllist(dirs);
+  free_dllist(printed);
+  free(parentdir);
+
+}
+
 void* traverse(char* dir){
   DIR *d;
   struct dirent *de;
   struct stat fbuf;
   int exists;
-  char* file;
-  char* dirname;
-  char* displayname;
   bool seen = false;
 
   d = opendir(dir);
-  if (d == NULL)
-  {
+  if (d == NULL){
     perror(dir);
     exit(1);
   }
 
-  for (de = readdir(d); de != NULL; de = readdir(d))
-  {
+  for (de = readdir(d); de != NULL; de = readdir(d)){
     if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
     
     // need to build name with prefix
@@ -219,12 +240,10 @@ void* traverse(char* dir){
     seen = false;
 
     exists = stat(file, &fbuf);
-    if (exists < 0)
-    {
+    if (exists < 0){
       fprintf(stderr, "Couldn't stat %s\n", file);
     }
-    else
-    {
+    else{
       int fnamesize = (int)strlen(dirname);
       char* fname = dirname;
       long finode = file_inode(file);
@@ -239,7 +258,7 @@ void* traverse(char* dir){
           seen = true;
         }
       }
-      if (!seen) {
+      if (!seen){
         dll_append(inodes, new_jval_l(file_inode(file)));
       }
 
@@ -250,21 +269,22 @@ void* traverse(char* dir){
         fwrite(&fmode, sizeof(fmode), 1, stdout);
         fwrite(&fmodt, sizeof(fmodt), 1, stdout);
 
-        if (is_this_dir(file) == true )
-        {
+        if (is_this_dir(file) == true ){
           //if its a directory, store directory to traverse 
-          //traverse(file);
-          
           dll_append(dirs, new_jval_s(strdup(file)));
+          free(file);
+          free(dirname);
         }
-        else
-        {//is a file, use file logic to display things
+        else{
+          //is a file, use file logic to display things
           long fsize = file_size(file);
           char* output = file_bytes(file);
 
           fwrite(&fsize, sizeof(fsize), 1, stdout);
           fwrite(output, sizeof(char), file_size(file), stdout);
-
+          free(output);
+          free(file);
+          free(dirname);
         }
       }
     }
@@ -282,6 +302,7 @@ void* traverse(char* dir){
       dll_append(printed, new_jval_s(strdup(tmp->val.s)));
       traverse(tmp->val.s);
     }
+    free(de);
   }
 }
 
@@ -292,24 +313,9 @@ int main(int argc, char *argv[])
   dirs = new_dllist();
   printed = new_dllist();
   
-  //need function to pull dir name only
-  char* pathname = strdup(argv[1]);
-  // char* parentdir = NULL;
-  parentdir = dir_name(argv[1]);
-
-  int fnamesize = (int)strlen(parentdir);
-  char* fname = parentdir;
-  long finode = file_inode(pathname);
-  int fmode = file_mode(pathname);
-  long fmodt = file_mod_time(pathname);
-
-  fwrite(&fnamesize, sizeof(fnamesize), 1, stdout);
-  fwrite(fname, sizeof(char), fnamesize, stdout);
-  fwrite(&finode, sizeof(finode), 1, stdout);
-  fwrite(&fmode, sizeof(fmode), 1, stdout);
-  fwrite(&fmodt, sizeof(fmodt), 1, stdout);
-
+  first_dir(argv[1]);
   traverse(pathname);
+  free_mem();
 
   return 0;
 }
