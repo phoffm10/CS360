@@ -11,6 +11,7 @@
 #include "fields.h"
 #include "dllist.h"
 
+//Forward Declarations
 char* dir_name(char* pathname);
 char* get_dir(char* path);
 bool is_this_dir(char *filename);
@@ -20,9 +21,11 @@ int file_mode(char *filename);
 long file_mod_time(char *filename);
 char *file_bytes(char *filename);
 char *prefix(char *basedir, char *filename);
+void first_dir(char* arg);
+void free_mem();
 void* traverse(char* dir);
 
-
+//Global Variables
 Dllist inodes;
 Dllist dirs;
 Dllist printed;
@@ -34,9 +37,9 @@ char* dirname;
 char* pathname;
 bool isprinted = false;
 
-
+//Returns directory at end of path
 char* dir_name(char* pathname){
-  //find index of final /
+  //Find index of final /
   char* dirn;
   int pathsize = strlen(pathname);
   int index = 0;
@@ -45,7 +48,7 @@ char* dir_name(char* pathname){
       index = i + 1;
     }
   }
-  //copy from final / to end
+  //Copy from final / to end, copy string to dirn
   if(index != 0){
     dirn = (char*)malloc((pathsize-index)+1);
     memcpy(dirn, pathname+index, pathsize-index);
@@ -53,53 +56,50 @@ char* dir_name(char* pathname){
     return dirn;
   }
   else{
+    //Case if no / found
     return pathname;
   }
 }
 
 char* get_dir(char* path){
   char* dir_name;
-  //char* maindir = strdup(parentdir);
 
+  //Finds string within a string
   char* dir_position = strstr(path, parentdir);
-  if (dir_position == NULL) {
-      // Directory not found in the full path
+  if (dir_position == NULL){
+      // If string not found
       return NULL;
   }
 
-  // Calculate the length of the subdirectory path
+  //Calculate the length of the substring
   int dir_namesize = (int)strlen(dir_position);
 
-  // Allocate memory for the subdirectory path
+  //Allocate memory for the substring
   dir_name = (char*)malloc(dir_namesize + 1);
-  if (dir_name == NULL) {
-      // Memory allocation failed
-      return NULL;
-  }
-  // Copy the subdirectory path into the allocated memory
+
+  //Copy the substring
   strcpy(dir_name, dir_position);
 
   return dir_name;
 }
 
-bool is_this_dir(char *filename)
-{
+bool is_this_dir(char *filename){
+  //Calls stat and returns true if directory
   struct stat buf;
   int exists;
   exists = stat(filename, &buf);
-  if (exists < 0)
-  {
+  if (exists < 0){
     fprintf(stderr, "Couldn't stat %s\n", filename);
     exit(1);
   }
-  if (S_ISDIR(buf.st_mode))
-  {
+  if (S_ISDIR(buf.st_mode)){
     return true;
   }
   return false;
 }
 
 long file_size(char *filename){
+  //Calls stat and returns filesize
   long size;
   struct stat buf;
   int exists;
@@ -113,6 +113,7 @@ long file_size(char *filename){
 }
 
 long file_inode(char *filename){
+  //Calls stat and returns inode
   long inode;
   struct stat buf;
   int exists;
@@ -126,6 +127,7 @@ long file_inode(char *filename){
 }
 
 int file_mode(char *filename){
+  //Calls stat and returns mode
   int mode;
   struct stat buf;
   int exists;
@@ -139,6 +141,7 @@ int file_mode(char *filename){
 }
 
 long file_mod_time(char *filename){
+  //Calls stat returns mod time
   long mod_time;
   struct stat buf;
   int exists;
@@ -152,7 +155,7 @@ long file_mod_time(char *filename){
 }
 
 char *file_bytes(char *filename){
-  // should cat file
+  //Prints files bytes
   FILE *fp;
   fp = fopen(filename, "rb");
   long bufsize;
@@ -169,20 +172,21 @@ char *file_bytes(char *filename){
 }
 
 char *prefix(char *basedir, char *filename){
-  // malloc length of both + extra char
+  //Allocate mem for length of both + extra char and null
   char *path;
   path = (char *)malloc((strlen(basedir) + strlen(filename) + 2) * sizeof(char));
   strcpy(path, basedir);
-  // strcpy base dir into ptr
+  //Cat / onto base directory
   strcat(path, "/");
-  // strcat filename
+  //Cat filename onto path
   strcat(path, filename);
   path[strlen(path)] = '\0';
-  // return ptr
+  //Return filename
   return path;
 }
 
 void first_dir(char* arg){
+  //Prints parent directory information
   pathname = strdup(arg);
   parentdir = dir_name(arg);
 
@@ -200,6 +204,7 @@ void first_dir(char* arg){
 }
 
 void free_mem(){
+  //Frees memory allocated in traverse
   free(pathname);
   dll_traverse(tmp, dirs){
     if(tmp->val.s != NULL){
@@ -219,6 +224,7 @@ void free_mem(){
 }
 
 void* traverse(char* dir){
+  //Open passed directory
   DIR *d;
   struct dirent *de;
   struct stat fbuf;
@@ -230,20 +236,22 @@ void* traverse(char* dir){
     perror(dir);
     exit(1);
   }
-
+  //Traverse passed directory
   for (de = readdir(d); de != NULL; de = readdir(d)){
     if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
     
-    // need to build name with prefix
+    //Builds full filename and display name
     file = prefix(dir, de->d_name);
     dirname = get_dir(file);
     seen = false;
 
+    //Check if stat succesful
     exists = stat(file, &fbuf);
     if (exists < 0){
       fprintf(stderr, "Couldn't stat %s\n", file);
     }
     else{
+      //Inofrmation printed for every file
       int fnamesize = (int)strlen(dirname);
       char* fname = dirname;
       long finode = file_inode(file);
@@ -253,16 +261,18 @@ void* traverse(char* dir){
       fwrite(&finode, sizeof(finode), 1, stdout);
 
       dll_traverse(tmp, inodes){
-        //if seen, set seen to true
+        //Traverse inode list to see if file alredy seen
         if(file_inode(file) == tmp->val.l){
           seen = true;
         }
       }
       if (!seen){
+        //Append inode if file not seen
         dll_append(inodes, new_jval_l(file_inode(file)));
       }
 
       if(seen == false){
+        //Information to print if file not already seen
         int fmode = file_mode(file);
         long fmodt = file_mod_time(file);
 
@@ -270,13 +280,13 @@ void* traverse(char* dir){
         fwrite(&fmodt, sizeof(fmodt), 1, stdout);
 
         if (is_this_dir(file) == true ){
-          //if its a directory, store directory to traverse 
+          //If its a directory, store directory to traverse later
           dll_append(dirs, new_jval_s(strdup(file)));
           free(file);
           free(dirname);
         }
         else{
-          //is a file, use file logic to display things
+          //If its a file, print file size and bytes
           long fsize = file_size(file);
           char* output = file_bytes(file);
 
@@ -290,7 +300,7 @@ void* traverse(char* dir){
     }
   }
   closedir(d);
-
+  //Traverses stored directories and adds them to printed list
   dll_rtraverse(tmp, dirs){
     isprinted = false;
     dll_traverse(tmp2, printed){
@@ -298,6 +308,7 @@ void* traverse(char* dir){
         isprinted = true;
       }
     }
+    //If directory not already printed, traverse
     if(!isprinted){
       dll_append(printed, new_jval_s(strdup(tmp->val.s)));
       traverse(tmp->val.s);
@@ -306,15 +317,17 @@ void* traverse(char* dir){
   }
 }
 
-int main(int argc, char *argv[])
-{
-
+int main(int argc, char *argv[]){
+  //Initializes dllists
   inodes = new_dllist();
   dirs = new_dllist();
   printed = new_dllist();
   
+  //Prints first dir information
   first_dir(argv[1]);
+  //Traverses the first dir files recursively
   traverse(pathname);
+  //Frees memory
   free_mem();
 
   return 0;
