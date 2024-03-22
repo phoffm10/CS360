@@ -227,22 +227,37 @@ void create_dirs(Dllist dirs){
 void create_files(JRB tree){
     Dllist files;
     files = new_dllist();
-    JRB tmp;
+    JRB tmp, tmp2;
 
     //traverse and call fwrite
     jrb_traverse(tmp, tree){
         Element* e = (Element* )tmp->val.v;
         if(is_dir(e) == false){     
             //printf("%s is not dir\n", e->name);       
-            if(!hard_link(e, tree)){
-                FILE *file = fopen(e->name, "wb");
-                if(file != NULL && e->bytes != NULL && e->filesize > 0){
-                    fwrite(e->bytes, sizeof(char), e->filesize, file);
-                //printf("made file :%s\n", e->name);
-                    fclose(file);
-                }
+            // if(!hard_link(e, tree)){
+            //     FILE *file = fopen(e->name, "wb");
+            //     if(file != NULL && e->bytes != NULL && e->filesize > 0){
+            //         fwrite(e->bytes, sizeof(char), e->filesize, file);
+            //     //printf("made file :%s\n", e->name);
+            //         fclose(file);
+            //     }
+            //     //fclose(file);
+            // }
+                if(e->bytes != NULL){
+                    FILE *file = fopen(e->name, "wb");
+                    if(file != NULL && e->bytes != NULL && e->filesize > 0){
+                        fwrite(e->bytes, sizeof(char), e->filesize, file);
+                    //printf("made file :%s\n", e->name);
+                        fclose(file);
+                    }
                 //fclose(file);
-            }
+                }
+                jrb_traverse(tmp2, tree){
+                    Element* temp = (Element* )tmp2->val.v;
+                    hard_link(temp, tree);
+                }
+
+
         }
     }
 }
