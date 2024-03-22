@@ -2,10 +2,13 @@
 //Lab 6 CS360
 
 #include <sys/stat.h>
+//#include <sys/time.h>
+#include <utime.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 
 #include "jrb.h"
@@ -37,6 +40,22 @@ typedef struct Element{
     struct Element **children;
 } Element;
 
+void null_set(Element *e);
+bool is_dir(Element *e);
+bool is_parent_dir(char* path, char* dir);
+void insert_element(Element *e, JRB tree);
+bool direct_child(char* parent, char* child);
+Element* element_return(char* key, JRB tree);
+void add_child(Element *parent, Element *child);
+void link_elements(JRB tree, Dllist dirs);
+void print(Element *e);
+void print_jrb(JRB tree);
+void create_dirs(Dllist dirs);
+void create_files(JRB tree);
+bool hard_link(Element *e, JRB tree);
+void create_modtimes(JRB tree);
+void create_modes(JRB tree);
+
 void null_set(Element *e){
     e->name = NULL;
     e->parent = NULL;
@@ -51,7 +70,11 @@ void null_set(Element *e){
 }
 
 bool is_dir(Element *e){
-    return e->mode == 0x000041ed;
+    //return (e->mode & 0x4000) != 0;
+    if (S_ISDIR(e->mode)){
+        return true;
+    }
+    return false;
 }
 
 bool is_parent_dir(char* path, char* dir){
@@ -166,7 +189,7 @@ void print(Element *e){
     }
     fflush(stdout);
     if(e->mode != -1){
-        printf("mode: %ld\n", e->mode);
+        printf("mode: %o\n", e->mode);
     }
     fflush(stdout);
     if(e->modtime != -1){
@@ -193,6 +216,81 @@ void print_jrb(JRB tree){
     }
 }
 
+void create_dirs(Dllist dirs){
+    Dllist tmp;
+    dll_traverse(tmp, dirs){
+        mkdir(tmp->val.s, 0777);
+        //printf("made dir :%s\n", tmp->val.s);
+    }
+}
+
+void create_files(JRB tree){
+    Dllist files;
+    files = new_dllist();
+    JRB tmp;
+
+    //traverse and call fwrite
+    jrb_traverse(tmp, tree){
+        Element* e = (Element* )tmp->val.v;
+        if(is_dir(e) == false){     
+            //printf("%s is not dir\n", e->name);       
+            if(!hard_link(e, tree)){
+                FILE *file = fopen(e->name, "wb");
+                if(file != NULL && e->bytes != NULL && e->filesize > 0){
+                    fwrite(e->bytes, sizeof(char), e->filesize, file);
+                //printf("made file :%s\n", e->name);
+                    fclose(file);
+                }
+                //fclose(file);
+            }
+        }
+    }
+}
+
+bool hard_link(Element *e, JRB tree){
+    //this may or may not work
+    //check e->inode against all other inodes
+    //if name is not the same, and inode is, hardlink
+    JRB tmp;
+    jrb_traverse(tmp, tree){
+        Element* d = (Element* )tmp->val.v;
+        if(strcmp(e->name, d->name)!= 0){
+            if(e->inode == d->inode){
+                if(e->bytes == NULL){
+                    //link
+                    link(d->name, e->name);
+                    e->modtime = d->modtime;
+                    e->mode = d->mode;
+                    // printf("LINK CREATED -----------\n");
+                    // printf("original :%s\n", d->name);
+                    // printf("new :%s\n", e->name);
+                    // printf("------------------------\n");
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void create_modtimes(JRB tree){
+    JRB tmp;
+    struct utimbuf t;
+    jrb_traverse(tmp, tree){
+        Element* e = (Element* )tmp->val.v;
+        t.modtime = e->modtime;
+        utime(e->name, &t);
+    }
+}
+
+void create_modes(JRB tree){
+    JRB tmp;
+    jrb_traverse(tmp, tree){
+        Element* e = (Element* )tmp->val.v;
+        chmod(e->name, e->mode);
+    }
+}
+
 int main(int argc, char* argv[]){
     Dllist inodes;
     Dllist dirs;
@@ -213,12 +311,25 @@ int main(int argc, char* argv[]){
         if(bytes_read == 0){
             break;
         }
+        //printf("namesize: %d\n", e->namesize);
         //filename
+        bytes_read = 0;
         e->name = (char*)malloc((sizeof(char)*e->namesize)+1);
-        fread(e->name, sizeof(char), e->namesize, stdin);
+        bytes_read = (int)fread(e->name, sizeof(char), e->namesize, stdin);
+        // if(bytes_read != e->namesize){
+        //     fprintf(stderr, "Bad tarfile\n");
+        //     exit(1);
+        // }
         e->name[e->namesize] = '\0';
+        //printf("name: %s\n", e->name);
         //inode
-        fread(&e->inode, sizeof(long), 1, stdin);
+        bytes_read = 0;
+        bytes_read = (int)fread(&e->inode, sizeof(long), 1, stdin);
+        // if(bytes_read != sizeof(long)){
+        //     fprintf(stderr, "Bad tarfile\n");
+        //     exit(1);
+        // }
+        //printf("inode: %ld\n", e->inode);
         //add inode to list and check if already on list
         dll_traverse(tmp, inodes){
             if(e->inode == tmp->val.l){
@@ -231,14 +342,38 @@ int main(int argc, char* argv[]){
         }
 
         if(!seen){
-            fread(&e->mode, sizeof(int), 1, stdin);
-            fread(&e->modtime, sizeof(long), 1, stdin);
+            bytes_read = 0;
+            bytes_read = fread(&e->mode, sizeof(int), 1, stdin);
+            // if(bytes_read != sizeof(int)){
+            //     fprintf(stderr, "Bad tarfile\n");
+            //     exit(1);
+            // }   
+            //printf("mode: %d\n", e->mode);
+            bytes_read = 0;
+            bytes_read = fread(&e->modtime, sizeof(long), 1, stdin);
+            // if(bytes_read != sizeof(long)){
+            //     fprintf(stderr, "Bad tarfile\n");
+            //     exit(1);
+            // }
+            //printf("modtime: %ld\n", e->modtime);
 
             if(is_dir(e) == false){
+                //printf("notdir\n");
+                fflush(stdout);
+                bytes_read = 0;
                 fread(&e->filesize, sizeof(long), 1, stdin);
+                // if(bytes_read != sizeof(long)){
+                //     fprintf(stderr, "Bad tarfile\n");
+                //     exit(1);
+                // }
 
                 e->bytes = (char*)malloc((sizeof(char)*e->filesize)+1);
+                bytes_read = 0;
                 fread(e->bytes, sizeof(char), e->filesize, stdin);
+                // if(bytes_read != e->filesize){
+                //     fprintf(stderr, "Bad tarfile\n");
+                //     exit(1);
+                // }
                 e->bytes[e->filesize] = '\0';
             }
             else{
@@ -274,6 +409,11 @@ int main(int argc, char* argv[]){
     //printf("link testing\n");
     link_elements(tree, dirs);
     print_jrb(tree);
+
+    create_dirs(dirs);
+    create_files(tree);
+    create_modtimes(tree);
+    create_modes(tree);
 
     return 0;
 }
