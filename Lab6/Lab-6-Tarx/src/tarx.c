@@ -2,7 +2,6 @@
 //Lab 6 CS360
 
 #include <sys/stat.h>
-//#include <sys/time.h>
 #include <utime.h>
 #include <time.h>
 #include <dirent.h>
@@ -16,17 +15,7 @@
 #include "fields.h"
 #include "dllist.h"
 
-/*
-4 byte int filename size
-filename
-8 byte long inode
-----if first time seen
-4 byte mode
-8 byte mod time
-----if file
-8 bytes long file size
-file bytes
-*/
+//Struct to hold directories and files
 typedef struct Element{
     char* key;
     char* name;
@@ -36,20 +25,13 @@ typedef struct Element{
     int mode;
     long modtime;
     long filesize;
-    int num_children;
-    //bool processed;
-    struct Element *parent;
-    struct Element **children;
 } Element;
 
+//Forward declarations
 void null_set(Element *e);
 bool is_dir(Element *e);
-bool is_parent_dir(char* path, char* dir);
 void insert_element(Element *e, JRB tree);
-bool direct_child(char* parent, char* child);
 Element* element_return(char* key, JRB tree);
-void add_child(Element *parent, Element *child);
-void link_elements(JRB tree, Dllist dirs);
 void print(Element *e);
 void print_jrb(JRB tree);
 void create_dirs(Dllist dirs, JRB tree);
@@ -57,58 +39,36 @@ void create_files(JRB tree);
 void hard_link(Element *e, JRB tree);
 void create_modtimes(JRB tree);
 void create_modes(JRB tree);
+void parse_input(JRB tree, Dllist dirs, Dllist inodes);
+void free_mem(JRB tree, Dllist dirs, Dllist inodes);
 
 void null_set(Element *e){
+    //Initializes element struct
     e->name = NULL;
-    e->parent = NULL;
-    e->children = NULL;
     e->bytes = NULL;
     e->namesize = -1;
     e->inode = -1;
     e->mode = -1;
     e->modtime = -1;
     e->filesize = -1;
-    e->num_children = 0;
 }
 
 bool is_dir(Element *e){
+    //Checks if element is a directory
     if (S_ISDIR(e->mode)){
         return true;
     }
     return false;
 }
 
-bool is_parent_dir(char* path, char* dir){
-    //Finds string within a string
-    char* dir_position = strstr(path, dir);
-    if (dir_position == NULL){
-        // If string not found
-        return false;
-    }
-    return true;
-}
-
 void insert_element(Element *e, JRB tree){
+    //Inserts element struct into tree
     e->key = strdup(e->name);
     jrb_insert_str(tree, e->key, new_jval_v((void *) e));
 }
 
-bool direct_child(char* parent, char* child){
-    int start = strlen(parent);
-    int end = strlen(child);
-    int slashes = 0;
-    for(int i = start; i < end; i++){
-        if (child[i] == '/'){
-            slashes++;
-        }
-    }
-    if(slashes == 1){
-        return true;
-    }
-    return false;
-}
-
 Element* element_return(char* key, JRB tree){
+    //Searches JRB and returns element
     JRB tmp = jrb_find_str(tree, key);
     if(tmp == NULL){
         return NULL;
@@ -116,31 +76,8 @@ Element* element_return(char* key, JRB tree){
     return tmp->val.v;
 }
 
-void add_child(Element *parent, Element *child){
-    parent->children = realloc(parent->children, (parent->num_children + 1) * sizeof(Element*));
-    parent->children[parent->num_children] = child;
-    child->parent = parent;
-    parent->num_children++;
-}
-
-void link_elements(JRB tree, Dllist dirs){
-    JRB jtmp;
-    Dllist dtmp;
-    //contains dir and one /
-    dll_traverse(dtmp, dirs){
-        Element *d = element_return(dtmp->val.s, tree);
-        jrb_traverse(jtmp, tree){
-            Element *e = jtmp->val.v;
-            if(is_parent_dir(e->key, dtmp->val.s)){
-                if(direct_child(dtmp->val.s, e->key)){
-                    add_child(d,e);
-                }
-            }
-        }
-    }
-}
-
 void print(Element *e){
+    //Prints element struct
     if(e->namesize != -1){
         printf("Namesize: \t%d\n", e->namesize);
     }
@@ -149,21 +86,6 @@ void print(Element *e){
         printf("Name: \t\t%s\n", e->name);
     }
     fflush(stdout);
-    //parent
-    if(e->parent != NULL){
-        printf("Parent: \t%s\n", e->parent->name);
-    }
-    //children
-    if(e->num_children == 0){
-        printf("Children: \tNone\n");
-    }
-    else{
-        printf("Children:\n");
-
-        for(int i = 0; i < e->num_children; i++){
-            printf("\t\t\t%s\n", e->children[i]->name);
-        }
-    }
     if(e->inode != -1){
         printf("Inode: \t\t%ld\n", e->inode);
     }
@@ -188,6 +110,7 @@ void print(Element *e){
 }
 
 void print_jrb(JRB tree){
+    //Prints JRB elements
     JRB tmp;
     jrb_traverse(tmp, tree){
         Element* e = (Element* )tmp->val.v;
@@ -197,6 +120,7 @@ void print_jrb(JRB tree){
 }
 
 void create_dirs(Dllist dirs, JRB tree){
+    //Traverse directory list and creates directories
     Dllist tmp;
     dll_traverse(tmp, dirs){
         mkdir(tmp->val.s, 0777);
@@ -205,11 +129,9 @@ void create_dirs(Dllist dirs, JRB tree){
 }
 
 void create_files(JRB tree){
-    Dllist files;
-    files = new_dllist();
     JRB tmp, tmp2;
 
-    //traverse and call fwrite
+    //Traverse tree and call fwrite if file has bytes
     jrb_traverse(tmp, tree){
         Element* e = (Element* )tmp->val.v;    
         if(e->bytes != NULL){
@@ -220,6 +142,7 @@ void create_files(JRB tree){
             }
         }      
     }
+    //Traverses and links necessary files
     jrb_traverse(tmp2, tree){
         Element* temp = (Element* )tmp2->val.v;
         hard_link(temp, tree);
@@ -227,15 +150,14 @@ void create_files(JRB tree){
 }
 
 void hard_link(Element *e, JRB tree){
-    //check e->inode against all other inodes
-    //if name is not the same, and inode is, hardlink
+    //Checks elements inodes against all other inodes
+    //If name is not the same, and inode is, hardlink
     JRB tmp;
     jrb_traverse(tmp, tree){
         Element* d = (Element* )tmp->val.v;
         if(strcmp(e->name, d->name)!= 0){
             if(e->inode == d->inode){
                 if(e->bytes == NULL && d->bytes != NULL){
-                    //link
                     link(d->name, e->name);
                     e->modtime = d->modtime;
                     e->mode = d->mode;
@@ -246,6 +168,7 @@ void hard_link(Element *e, JRB tree){
 }
 
 void create_modtimes(JRB tree){
+    //Sets file modtimes
     JRB tmp;
     struct utimbuf t;
     time_t current_time;
@@ -259,6 +182,7 @@ void create_modtimes(JRB tree){
 }
 
 void create_modes(JRB tree){
+    //Sets file modes
     JRB tmp;
     jrb_traverse(tmp, tree){
         Element* e = (Element* )tmp->val.v;
@@ -266,32 +190,30 @@ void create_modes(JRB tree){
     }
 }
 
-int main(int argc, char* argv[]){
-    Dllist inodes;
-    Dllist dirs;
-    Dllist tmp, tmp2;
-    JRB tree;
-
-    tree = make_jrb();
-    dirs = new_dllist();
-    inodes = new_dllist();
+void parse_input(JRB tree, Dllist dirs, Dllist inodes){
     bool seen = false;
+    Dllist tmp;
 
     while(1){
         seen = false;
         Element *e = malloc(sizeof(Element));
+        //Initializes element struct
         null_set(e);
-        //file namesize
+
+        //Stores namesize, errors out if not 4 bytes
         int bytes_read = (int)fread(&e->namesize, sizeof(char), 4, stdin);
         if (bytes_read == 0) {
             if (feof(stdin)) {
+                free(e);
                 break;
             } else {
                 fprintf(stderr, "Bad tarfile.\n");
+                free(e);
                 exit(1);
             }
         }
 
+        //Stores name
         e->name = (char*)malloc((sizeof(char)*e->namesize)+1);
         bytes_read = (int)fread(e->name, sizeof(char), e->namesize, stdin);
         if(bytes_read != e->namesize){
@@ -300,30 +222,33 @@ int main(int argc, char* argv[]){
         }
         e->name[e->namesize] = '\0';
 
+        //Stores inode
         bytes_read = (int)fread(&e->inode, sizeof(long), 1, stdin);
         if(bytes_read == 0){
             fprintf(stderr, "Bad tarfile\n");
             exit(1);
         }
 
-        //add inode to list and check if already on list
+        //Adds inode to list and checks if already on list
         dll_traverse(tmp, inodes){
             if(e->inode == tmp->val.l){
             seen = true;
             }
         }
         if (!seen){
-            //Append inode if file not seen
+            //Append inode if element not seen
             dll_append(inodes, new_jval_l(e->inode));
         }
 
         if(!seen){
+            //Stores mode
             bytes_read = fread(&e->mode, sizeof(int), 1, stdin);
             if(bytes_read == 0){
                 fprintf(stderr, "Bad tarfile\n");
                 exit(1);
             }   
 
+            //Stores modtime
             bytes_read = fread(&e->modtime, sizeof(long), 1, stdin);
             if(bytes_read == 0){
                 fprintf(stderr, "Bad tarfile\n");
@@ -331,13 +256,15 @@ int main(int argc, char* argv[]){
             }
 
             if(is_dir(e) == false){
-
+                
+                //Stores filesize
                 bytes_read = fread(&e->filesize, sizeof(long), 1, stdin);
                 if(bytes_read == 0){
                     fprintf(stderr, "Bad tarfile\n");
                     exit(1);
                 }
 
+                //Stores file bytes
                 e->bytes = (char*)malloc((sizeof(char)*e->filesize)+1);
                 bytes_read = fread(e->bytes, sizeof(char), e->filesize, stdin);
                 if(bytes_read != e->filesize){
@@ -347,19 +274,64 @@ int main(int argc, char* argv[]){
                 e->bytes[e->filesize] = '\0';
             }
             else{
+                //Stores directory names
                 dll_append(dirs, new_jval_s(strdup(e->name)));
             }
         }
+        //Inserts element struct into JRB
         insert_element(e, tree);
     }
+}
 
-    link_elements(tree, dirs);
+void free_mem(JRB tree, Dllist dirs, Dllist inodes){
+    //Frees allocated memory
+    JRB jtmp;
+    Dllist tmp;
+    jrb_traverse(jtmp, tree){
+        Element* e = (Element* )jtmp->val.v;
+        if(e->key != NULL){
+            free(e->key);
+        }
+        if(e->name != NULL){
+            free(e->name);
+        }
+        if(e->bytes != NULL){
+            free(e->bytes);
+        }
+        free(e);
+    }
+    jrb_free_tree(tree);
+
+    dll_traverse(tmp, dirs){
+        free(tmp->val.s);
+    }
+    free_dllist(dirs);
+    free_dllist(inodes);
+}
+
+int main(int argc, char* argv[]){
+    Dllist inodes;
+    Dllist dirs;
+    JRB tree;
+
+    tree = make_jrb();
+    dirs = new_dllist();
+    inodes = new_dllist();
+
+    //Reads tarc file and creates element structs
+    parse_input(tree, dirs, inodes);
+    
+    //Prints elements to stdout
     print_jrb(tree);
 
+    //Creating directories
     create_dirs(dirs, tree);
     create_files(tree);
     create_modtimes(tree);
     create_modes(tree);
+
+    //Freeing memory
+    free_mem(tree, dirs, inodes);
 
     return 0;
 }
