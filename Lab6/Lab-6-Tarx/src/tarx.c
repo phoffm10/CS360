@@ -36,6 +36,7 @@ typedef struct Element{
     long modtime;
     long filesize;
     int num_children;
+    bool processed;
     struct Element *parent;
     struct Element **children;
 } Element;
@@ -50,7 +51,7 @@ void add_child(Element *parent, Element *child);
 void link_elements(JRB tree, Dllist dirs);
 void print(Element *e);
 void print_jrb(JRB tree);
-void create_dirs(Dllist dirs);
+void create_dirs(Dllist dirs, JRB tree);
 void create_files(JRB tree);
 bool hard_link(Element *e, JRB tree);
 void create_modtimes(JRB tree);
@@ -67,6 +68,7 @@ void null_set(Element *e){
     e->modtime = -1;
     e->filesize = -1;
     e->num_children = 0;
+    e->processed = false;
 }
 
 bool is_dir(Element *e){
@@ -215,11 +217,13 @@ void print_jrb(JRB tree){
         print(e);
     }
 }
-
-void create_dirs(Dllist dirs){
+//----------------------------------------------------------------------------------------
+void create_dirs(Dllist dirs, JRB tree){
     Dllist tmp;
     dll_traverse(tmp, dirs){
         mkdir(tmp->val.s, 0777);
+        Element *e = element_return(tmp->val.s, tree);
+        e->processed = true;
         //printf("made dir :%s\n", tmp->val.s);
     }
 }
@@ -231,34 +235,26 @@ void create_files(JRB tree){
 
     //traverse and call fwrite
     jrb_traverse(tmp, tree){
-        Element* e = (Element* )tmp->val.v;
-        if(is_dir(e) == false){     
-            //printf("%s is not dir\n", e->name);       
-            // if(!hard_link(e, tree)){
-            //     FILE *file = fopen(e->name, "wb");
-            //     if(file != NULL && e->bytes != NULL && e->filesize > 0){
-            //         fwrite(e->bytes, sizeof(char), e->filesize, file);
-            //     //printf("made file :%s\n", e->name);
-            //         fclose(file);
-            //     }
-            //     //fclose(file);
-            // }
-                if(e->bytes != NULL){
-                    FILE *file = fopen(e->name, "wb");
-                    if(file != NULL && e->bytes != NULL && e->filesize > 0){
-                        fwrite(e->bytes, sizeof(char), e->filesize, file);
-                    //printf("made file :%s\n", e->name);
-                        fclose(file);
-                    }
-                //fclose(file);
-                }
-                jrb_traverse(tmp2, tree){
-                    Element* temp = (Element* )tmp2->val.v;
-                    hard_link(temp, tree);
-                }
-
-
+        Element* e = (Element* )tmp->val.v;    
+        if(e->bytes != NULL){
+            FILE *file = fopen(e->name, "wb");
+            //e->processed = true;
+            if(file != NULL && e->bytes != NULL && e->filesize > 0){
+                fwrite(e->bytes, sizeof(char), e->filesize, file);
+                e->processed = true;
+            //printf("made file :%s\n", e->name);
+                fclose(file);
+            }
+        //fclose(file);
         }
+        // jrb_traverse(tmp2, tree){
+        //     Element* temp = (Element* )tmp2->val.v;
+        //     hard_link(temp, tree);
+        // }        
+    }
+    jrb_traverse(tmp2, tree){
+        Element* temp = (Element* )tmp2->val.v;
+        hard_link(temp, tree);
     }
 }
 
@@ -271,11 +267,12 @@ bool hard_link(Element *e, JRB tree){
         Element* d = (Element* )tmp->val.v;
         if(strcmp(e->name, d->name)!= 0){
             if(e->inode == d->inode){
-                if(e->bytes == NULL){
+                if(e->bytes == NULL && d->bytes != NULL){
                     //link
                     link(d->name, e->name);
                     e->modtime = d->modtime;
                     e->mode = d->mode;
+                    e->processed = true;
                     // printf("LINK CREATED -----------\n");
                     // printf("original :%s\n", d->name);
                     // printf("new :%s\n", e->name);
@@ -286,6 +283,33 @@ bool hard_link(Element *e, JRB tree){
         }
     }
     return false;
+}
+//----------------------------------------------------------------------------------------
+void final_check(JRB tree){
+    JRB tmp;
+    jrb_traverse(tmp, tree){
+        Element *e = (Element* )tmp->val.v;
+        if(e->processed == false){
+            //printf("final pass: %s\n", e->name);
+            if(e->bytes != NULL){
+                FILE *file = fopen(e->name, "wb");
+                //e->processed = true;
+                if(file != NULL && e->bytes != NULL && e->filesize > 0){
+                    fwrite(e->bytes, sizeof(char), e->filesize, file);
+                    e->processed = true;
+                    //printf("made file :%s\n", e->name);
+                    fclose(file);
+                }
+            }
+            else if(is_dir(e)){
+                mkdir(e->name, 0777);
+                e->processed = true;
+            }
+            else{
+                hard_link(e, tree);
+            }
+        }
+    }
 }
 
 void create_modtimes(JRB tree){
@@ -376,14 +400,14 @@ int main(int argc, char* argv[]){
                 //printf("notdir\n");
                 fflush(stdout);
                 bytes_read = 0;
-                fread(&e->filesize, sizeof(long), 1, stdin);
+                bytes_read = fread(&e->filesize, sizeof(long), 1, stdin);
                 // if(bytes_read != sizeof(long)){
                 //     fprintf(stderr, "Bad tarfile\n");
                 //     exit(1);
                 // }
 
                 e->bytes = (char*)malloc((sizeof(char)*e->filesize)+1);
-                bytes_read = 0;
+                // bytes_read = 0;
                 fread(e->bytes, sizeof(char), e->filesize, stdin);
                 // if(bytes_read != e->filesize){
                 //     fprintf(stderr, "Bad tarfile\n");
@@ -425,8 +449,9 @@ int main(int argc, char* argv[]){
     link_elements(tree, dirs);
     print_jrb(tree);
 
-    create_dirs(dirs);
+    create_dirs(dirs, tree);
     create_files(tree);
+    final_check(tree);
     create_modtimes(tree);
     create_modes(tree);
 
