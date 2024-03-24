@@ -1,5 +1,5 @@
 //Peter Hoffman
-//Lab 6 CS360
+//Lab6 CS360
 
 #include <sys/stat.h>
 #include <utime.h>
