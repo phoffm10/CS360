@@ -1,0 +1,73 @@
+#!/bin/sh 
+
+dir=/home/jplank/cs360/labs/Lab-7-Malloc
+ge="$dir/Gradescript-Examples"
+
+if [ $# -ne 1 ]; then
+  echo 'usage: gradescript problem_number (1-100)' >&2
+  exit 1
+fi
+
+if [ "$1" -gt 0 -a "$1" -le 100 ]; then
+  enum=`echo $1 | awk '{ printf "%03d\n", $1 }'`
+else
+  echo 'usage: gradescript problem_number (1-100)' >&2
+  exit 1
+fi
+  
+program=mymalloc.c
+
+if [ ! -f $program ]; then
+  echo "Problem $enum is incorrect."
+  echo ""
+  echo "Your file $program does not exist."
+  exit 0
+fi
+
+rm -f a.out tmp-$enum-test-stdout.txt tmp-$enum-test-stderr.txt mymalloc.h test.c tmp-correct.txt
+cp $dir/mymalloc.h .
+cp $ge/$enum.c test.c
+
+if gcc test.c $program ; then
+  ok=1
+else
+  echo ""
+  echo "Compilation failed: gcc test.c $program"
+  exit 1
+fi
+
+./a.out > tmp-$enum-test-stdout.txt 2> tmp-$enum-test-stderr.txt
+
+err=`wc tmp-$enum-test-stderr.txt | awk '{ print $1 }'`
+echo "Correct" > tmp-correct.txt
+out=`diff tmp-correct.txt tmp-$enum-test-stdout.txt | wc | awk '{ print $1 }'`
+
+if [ $out != 0 -o $err != 0 ]; then
+  echo "Problem $enum is incorrect."
+  echo ""
+  if [ $err != 0 ]; then
+    echo "Your program produced output on standard error."
+    echo ""
+    cat tmp-$enum-test-stderr.txt
+  fi
+  if [ $out != 0 ]; then
+    echo "Your program did not pass the memory tests."
+    echo ""
+    cat tmp-$enum-test-stdout.txt
+  fi
+  echo ""
+  echo "The program compilation was: gcc test.c $program"
+  echo ""
+  echo "Then we ran a.out:"
+  echo ""
+  echo "Your standard output is in tmp-$enum-test-stdout.txt."
+  echo "Your standard error  is in tmp-$enum-test-stderr.txt."
+  echo ""
+else 
+  echo "Problem $enum is correct."
+  echo ""
+  echo "The program compilation was: gcc test.c $program"
+  echo ""
+  echo "Then we ran a.out."
+  rm -f tmp-$enum-test-stdout.txt tmp-$enum-test-stderr.txt tmp-correct.txt
+fi

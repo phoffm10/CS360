@@ -1,0 +1,167 @@
+<TITLE>CS360 Malloc Lab</title>
+
+<body bgcolor=FFFFFF>
+
+<h1>CS360 Malloc Lab</h1>
+
+<UL>
+<LI> <a href=http://web.eecs.utk.edu/~jplank>James S. Plank</a>
+<LI> <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/>CS360</a>
+<LI> URL: <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/labs/Lab-7-Malloc/index.html>
+                  http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/labs/Lab-7-Malloc/index.html</a>
+</UL>
+
+<hr>
+You may find the program <b>mymalloc.c</b> from Dr. Marz' <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/Malloc2/Malloc-Marz-2/index.html>second malloc lecture</a> useful.
+<hr>
+<h3>What you submit</h3>
+
+You should submit <b>mymalloc.c</b>, which is described below.
+
+<hr>
+<h3>Description</h3>
+
+Your job in this lab is to write <b>mymalloc.c</b>, which implements the 
+procedures defined in 
+<b><a href=mymalloc.h>mymalloc.h</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void *my_malloc(size_t size);
+void my_free(void *ptr);
+void *free_list_begin();
+void *free_list_next(void *node);
+void coalesce_free_list();
+</pre></td></table></center><p>
+
+<b>my_malloc()</b> and <b>my_free()</b> should work just like <b>malloc()</b>
+and <b>free()</b> as discussed in lecture.
+<b>My_malloc()</b> is a buffered interface to <b>sbrk()</b>, doling out
+heap memory for programs that call it.  It does so by managing a free list of
+memory, using <b>sbrk()</b> to add memory to the free list.
+When a user calls <b>my_malloc(s)</b>, you
+will return a pointer to at least <b>s</b> bytes of memory, aligned on an 8-byte
+quantity.  As described in class, you will also reserve eight bytes <i>before</i>
+the pointer.  In the first four of these bytes, you should store the size of the
+memory chunk allocated, which includes everything -- the user's memory, the bookkeeping
+bytes and any padding.
+<p>
+You may not call <b>sbrk()</b> with a value less than 8192.  
+You should only call <b>sbrk()</b> with a value greater than 8192 if <b>my_malloc()</b> 
+was called with a value greater than 8184.
+<p>
+When the user calls <b>my_free(p)</b>, the chunk of memory should be returned to the
+free list.  You do not have to coalesce free list entries when you call <b>my_free()</b>.
+<p>
+<b>Free_list_begin()</b> returns a pointer to the first node on the free list.
+If the free list is empty, it should return NULL.  The first four bytes 
+on a free list node should contain the size of the node (including all metadata,
+like the size and pointers).  
+<p>
+<b>Free_list_next(n)</b> takes a pointer to a free list node and returns a pointer
+to the next node on the free list.  If <b>n</b> is the last node on the free list,
+then <b>free_list_next(n)</b> should return NULL.
+<p>
+Finally, <b>coalesce_free_list()</b> should process the free list and combine all
+adjacent entries.  
+<p>
+Let's take some simple examples.  First, suppose the user calls <b>my_malloc(9990)</b>.
+Your program will pad 9990 to a multiple of eight (9992) and add 8 bytes for bookkeeping.
+That's 10000 bytes.  Since that is bigger than 8192, you'll call <b>sbrk(10000)</b>.
+Suppose that returns 0x10800.  You will put the number 10000 at address 0x10800 and
+return 0x10808 to the user.  There is no free list right now, so <b>Free_list_begin()</b>
+will return NULL.
+<p>
+Now suppose the user calls <b>my_free(0x10808)</b>.  Those 10000 bytes now turn into
+a free list node.  The first four bytes remain 10000, but we'll modify some stuff to make
+the free list work.  <b>Free_list_begin()</b> will return 0x10800 and 
+<b>Free_list_next(0x10800)</b> will return NULL.  
+<p>
+Suppose the user calls <b>my_malloc(4992)</b>. That is a multiple of eight, so you 
+will add eight bytes and carve 5000 bytes off your free list node.  Personally, I'd
+carve it off the back of the free list node -- it's easier code to write.  When this
+is done, the state of memory is as follows:
+<p>
+<UL>
+<LI> The free list contains one node, which is 5000 bytes and starts at address 0x10800.
+<LI> The four bytes starting at address 0x10800 contain the number 5000.
+<LI> The <b>my_malloc()</b> call returned 0x10800 + 5000 + 8 = 0x11b90.
+<LI> The size of the chunk is 5000 bytes, which means that the number at address 0x11b88 is 5000.
+<LI> <b>Free_list_begin()</b> will still return 0x10800.
+<LI> <b>Free_list_next(0x10800)</b> will return NULL.  
+</UL>
+
+Now, suppose the user calls <b>my_free(0x11b90)</b>.  This will put that chunk of 5000 bytes
+on the free list, and the free list contains two nodes: 0x11b88 and 0x10800.  Even though they
+are contiguous, we don't coalesce them during the <b>my_free()</b> call.  
+<b>Free_list_begin()</b> will return either 0x11b88 or 0x10800, and
+<b>free_list_next(free_list_begin())</b> will return the other one.  
+<p>
+
+Now, suppose I call <b>coalesce_free_list()</b>.  
+This will combine the two free list nodes into one so that the state of memory is 
+as follows:
+
+<UL>
+<LI> The free list contains one node, which is 10000 bytes and starts at address 0x10800.
+<LI> The four bytes starting at address 0x10800 contain the number 10000.
+<LI> <b>Free_list_begin()</b> will return 0x10800.
+<LI> <b>Free_list_next(0x10800)</b> will return NULL.  
+</UL>
+
+<hr>
+<h3>Testing your code and Grading Program Quirks</h3>
+
+Were I you, I'd write my own testing program and compile it with <b>mymalloc.c</b>, before
+bothering with the gradescripts.  
+<p>
+The way that the gradescript works, is that it
+copies <b>mymalloc.h</b> from the lab directory, and one of the C programs
+from <b>/home/jplank/cs360/labs/Lab-7-Malloc/Gradescript-Examples</b> into <b>test.c</b>.
+It then compiles 
+<b>test.c</b> and 
+<b>mymalloc.c</b>, and runs the executable.  If the executable prints "Correct", then
+you have passed the gradescript.
+<p>
+The gradescript examines memory in terms of the values returned from <b>my_malloc()</b>
+and the contents of the free list to make sure that everything works.  For example, the first
+few programs will perform a few <b>my_malloc()</b> and/or <b>my_free()</b> calls that require
+fewer than 8192 bytes.  It will then look at memory and make sure that the 8192 bytes
+that were allocated are being used in a correct manner.  There should be no wasted bytes.
+
+<p>
+<hr>
+<h3>Restrictions</h3>
+
+<UL>
+<LI> Your program may have one global variable.  Mine is the pointer to the head
+of the free list.
+<p>
+<LI> You may not call <b>sbrk()</b> with values smaller than 8192 bytes (with the 
+exception of calling <b>sbrk(0)</b> to check the current end of the heap).
+<p>
+<LI> You may not make any external procedure or system calls with the following
+exception:
+You may make <b>one</b> call to <b>malloc()</b>,
+one call to <b>qsort()</b> and one call to <b>free()</b>
+during <b>coalesce_free_list()</b>.
+<p>
+<LI> To reiterate, 
+you are not allowed to otherwise utilize libraries like the dllist or jrb libraries.
+<p>
+<LI> You should not assume that <b>sbrk()</b> is not called by other procedures that
+the user may use.  Since that was an awkward sentence, I'll try it without the
+double-negative: You should assume that other procedures may call <b>sbrk()</b> between
+calls to <b>mymalloc()</b>.
+<p>
+<LI> You may not allocate more than 8 bytes of bookkeeping for eached allocated chunk.
+<p>
+<LI> Since the <b>-m32</b> compiler flag is gone, you will be working with 8-byte pointers.
+That means that your free list nodes will be 16 or 24 bytes.  (When I implemented this,
+I used a singly linked list, so mine is 16 bytes).  The code in the grading script
+should work on both 32 and 64 machines.  My recommendation is that you work on a 64-bit
+machine, so that your code will work on the lab machines.  The compiler yells at me on
+my mac, saying <b>sbrk()</b> is deprecated, but my code still works.
+</UL>
