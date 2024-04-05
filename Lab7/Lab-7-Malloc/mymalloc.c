@@ -28,6 +28,8 @@ typedef struct Chunk{
 
 Chunk* free_list_head = NULL;
 
+void print_free_list();
+
 void *my_malloc(size_t size);
 void my_free(void *ptr);
 //really dont need this below
@@ -161,21 +163,15 @@ void *my_malloc(size_t size){
         freelist_insert(mod_chunk);
       }            
     }
+  
+    mod_chunk->size -= alignment(size);
+    Chunk* alloc = (Chunk*)((void*)mod_chunk + mod_chunk->size + 8);
+    alloc->size = alignment(size);
 
-    //cut up free chunk ptr to alloc mem
-    //move free list chunk ptr up by aligned size
-    void* alloc = (char*)mod_chunk + 8;
-    Chunk* new_free;
-    void* tmp;
-    tmp = (char*)mod_chunk + alignment(size);
-    new_free = (Chunk*)tmp;
-    //set new chunk size for moved chunk
-    new_free->size = mod_chunk->size - alignment(size);
-    //relink to list (how?)
-    freelist_insert(new_free);
-    remove_freelist_chunk(mod_chunk);
-    //return ptr to inital mem to user
-    return alloc;
+    int* size_ptr = (int*)((void*)alloc - 8);
+    *size_ptr = alignment(size);
+
+    return (void*)alloc;
   }
 }
 
@@ -204,12 +200,12 @@ void coalesce_free_list(){
 void print_free_list(){
   Chunk* current_chunk;
   current_chunk = get_freelist_begin();
-  printf("$$$$$$$$$$$$$$$$\n");
-  printf("head\n");
-  printf("pointer: %p\n", (void*)free_list_head);
-  printf("as int: %ld\n", (long)free_list_head);
-  printf("size: %d\n", free_list_head->size);
-  printf("$$$$$$$$$$$$$$$$\n");
+  // printf("$$$$$$$$$$$$$$$$\n");
+  // printf("head\n");
+  // printf("pointer: %p\n", (void*)free_list_head);
+  // printf("as int: %ld\n", (long)free_list_head);
+  // printf("size: %d\n", free_list_head->size);
+  // printf("$$$$$$$$$$$$$$$$\n");
 
   while (current_chunk != NULL) {
     // Process current_chunk
