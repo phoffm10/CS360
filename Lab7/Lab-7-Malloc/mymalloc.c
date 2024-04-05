@@ -1,24 +1,8 @@
 //Peter Hoffman
 #include <stdio.h>
 #include <stdlib.h>
-//can i include this?
 #include <unistd.h>
 #include <stdbool.h>
-
-//How do i structure/insert values into this list and have them correspond to spots in memory?
-//Should my insert function be different than it is now, add to the end instead of beginning?
-
-//walk list and find last non null to add chunk
-//sort list when i insert chunks by location
-
-//print debug free list function
-//function to return max of two ints
-//subract malloc bytes from nodes and move ptr by that many bytes
-
-//find chunk big enough
-//cast to a void*
-//add passed+padded+aligned+8 size to void* ptr using ptr arithmatic
-
 
 typedef struct Chunk{
   int size;
@@ -32,26 +16,25 @@ void print_free_list();
 
 void *my_malloc(size_t size);
 void my_free(void *ptr);
-//really dont need this below
 void *free_list_begin();
 void *free_list_next(void *node);
 void coalesce_free_list();
 
-Chunk* create_chunk(int size){
-  //cannot be called with less than 16
-  //sbrk on passed size
-  //maxsize = 8192
+// Chunk* create_chunk(int size){
+//   //cannot be called with less than 16
+//   //sbrk on passed size
+//   //maxsize = 8192
 
-  size_t sbrk_size = (size_t)size;
-  void* ptr = sbrk(sbrk_size);
-  Chunk* new_chunk = (Chunk*)ptr;
+//   size_t sbrk_size = (size_t)size;
+//   void* ptr = sbrk(sbrk_size);
+//   Chunk* new_chunk = (Chunk*)ptr;
 
-  new_chunk->size = size;
-  new_chunk->next = NULL;
-  new_chunk->prev = NULL;
-  //freelist_insert(new_chunk);
-  return new_chunk;
-}
+//   new_chunk->size = size;
+//   new_chunk->next = NULL;
+//   new_chunk->prev = NULL;
+//   //freelist_insert(new_chunk);
+//   return new_chunk;
+// }
 
 
 //Appends node to end of list
@@ -125,10 +108,9 @@ void *my_malloc(size_t size){
   Chunk* mod_chunk;
   //check if call is greater than 8184, if so call sbrk on passed size and return ptr
   if(size > 8184){
-    // printf("above max\n");
-    // printf("size: %d\n", size);
-    // printf("aligned: %d\n", alignment(size));
     void* alloc = sbrk(alignment(size));
+    int* size_ptr = (int*)((void*)alloc);
+    *size_ptr = alignment(size);
     return (alloc + 8);
   }
   else{
