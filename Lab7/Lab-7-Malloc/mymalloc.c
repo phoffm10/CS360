@@ -1,4 +1,5 @@
 //Peter Hoffman
+//CS360 Lab 7
 
 #include <stdio.h>
 #include <stdlib.h>
