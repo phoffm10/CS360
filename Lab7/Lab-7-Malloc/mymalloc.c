@@ -1,17 +1,25 @@
 //Peter Hoffman
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
 
+//Free list struct
 typedef struct Chunk{
   int size;
   struct Chunk* next;
   struct Chunk* prev;
 } Chunk;
 
+//Global list pointer
 Chunk* free_list_head = NULL;
 
+void freelist_insert(Chunk* chunk);
+void remove_freelist_chunk(Chunk* chunk);
+Chunk* get_freelist_begin();
+Chunk* get_next_free_chunk(Chunk* chunk);
+size_t alignment(int val);
 void print_free_list();
 
 void *my_malloc(size_t size);
@@ -20,26 +28,8 @@ void *free_list_begin();
 void *free_list_next(void *node);
 void coalesce_free_list();
 
-// Chunk* create_chunk(int size){
-//   //cannot be called with less than 16
-//   //sbrk on passed size
-//   //maxsize = 8192
-
-//   size_t sbrk_size = (size_t)size;
-//   void* ptr = sbrk(sbrk_size);
-//   Chunk* new_chunk = (Chunk*)ptr;
-
-//   new_chunk->size = size;
-//   new_chunk->next = NULL;
-//   new_chunk->prev = NULL;
-//   //freelist_insert(new_chunk);
-//   return new_chunk;
-// }
-
-
-//Appends node to end of list
+//Appends node to freelist, inserts in ascending order
 void freelist_insert(Chunk* chunk){
-  //need to add functionality to insert sorted
   chunk->next = NULL;
   chunk->prev = NULL;
 
@@ -68,8 +58,8 @@ void freelist_insert(Chunk* chunk){
   }
 }
 
+//Removes chunk and links adjacent nodes to each other
 void remove_freelist_chunk(Chunk* chunk){
-  //should link adjacent nodes around given node
   if(chunk->prev != NULL){
     chunk->prev->next = chunk->next;
   }
@@ -81,6 +71,7 @@ void remove_freelist_chunk(Chunk* chunk){
   }
 }
 
+//Both of these return pointers to free list head
 Chunk* get_freelist_begin(){
   return free_list_head;
 }
@@ -88,14 +79,25 @@ void *free_list_begin(){
   return (void*)free_list_head;
 }
 
+//Both of these return next freelist pointer if it exists
 Chunk* get_next_free_chunk(Chunk* chunk){
-  return chunk->next;
+  Chunk *nchunk = chunk;
+  if (nchunk != NULL && nchunk->next != NULL) {
+    return nchunk->next;
+  } else {
+    return NULL;
+  }
 }
-
 void *free_list_next(void *node){
-  return ((Chunk*)node)->next;
+  Chunk *chunk = (Chunk *)node;
+  if (chunk != NULL && chunk->next != NULL) {
+    return chunk->next;
+  } else {
+    return NULL;
+  }
 }
 
+//Returns aligned size given a requested size
 size_t alignment(int val){
   int tmp = -8;
   val += 7 + 8;
@@ -103,31 +105,28 @@ size_t alignment(int val){
   return (size_t)val;
 }
 
-//This does not work, needs testing
 void *my_malloc(size_t size){
   Chunk* mod_chunk;
-  //check if call is greater than 8184, if so call sbrk on passed size and return ptr
-  if(size > 8184){
+  //Check if call is greater than 8184, if so call sbrk on passed size and return ptr
+  if(size >= 8184){
     void* alloc = sbrk(alignment(size));
     int* size_ptr = (int*)((void*)alloc);
     *size_ptr = alignment(size);
     return (alloc + 8);
   }
   else{
-    //check if free list exists
+    //Check if free list exists
     if(get_freelist_begin() == NULL){
-      //sbrk8192
       void* ptr = sbrk(8192);
       mod_chunk = (Chunk*)ptr;
       mod_chunk->size = 8192;
-      //insert into free list
+      //Insert into free list
       freelist_insert(mod_chunk);
-      //free list head should = sbrk(8192)
     }
     else{
       bool found = false;
       mod_chunk = get_freelist_begin();
-      //walk list to find chunk that fits
+      //Walk list to find chunk that fits
       while (mod_chunk != NULL) {
         if(mod_chunk->size >= alignment(size)){
           void* ptr = mod_chunk;
@@ -141,28 +140,37 @@ void *my_malloc(size_t size){
         void* ptr = sbrk(8192);
         mod_chunk = (Chunk*)ptr;
         mod_chunk->size = 8192;
-        //insert into free list
+        //Insert into free list
         freelist_insert(mod_chunk);
       }            
     }
-  
+
+    //Resize free list chunk size
     mod_chunk->size -= alignment(size);
     Chunk* alloc = (Chunk*)((void*)mod_chunk + mod_chunk->size + 8);
     alloc->size = alignment(size);
 
+    //Set size of first 8 bytes for alloc ptr
     int* size_ptr = (int*)((void*)alloc - 8);
     *size_ptr = alignment(size);
 
+    //If the free list chunk is now size 0, remove it from the list
+    if(mod_chunk->size == 0){
+      remove_freelist_chunk(mod_chunk);
+      free_list_head = NULL;
+    }
     return (void*)alloc;
   }
 }
 
+//Inserts pointer back into free list
 void my_free(void *ptr){
   ptr -= 8;
   Chunk* new_chunk = (Chunk*)ptr;
   freelist_insert(new_chunk);
 }
 
+//Checks adjacent nodes to see if address is the same and coalesces
 void coalesce_free_list(){
   Chunk* current_chunk = free_list_begin();
   while (current_chunk != NULL && current_chunk->next != NULL){
@@ -179,15 +187,10 @@ void coalesce_free_list(){
   }
 }
 
+//Prints free list for debugging
 void print_free_list(){
   Chunk* current_chunk;
   current_chunk = get_freelist_begin();
-  // printf("$$$$$$$$$$$$$$$$\n");
-  // printf("head\n");
-  // printf("pointer: %p\n", (void*)free_list_head);
-  // printf("as int: %ld\n", (long)free_list_head);
-  // printf("size: %d\n", free_list_head->size);
-  // printf("$$$$$$$$$$$$$$$$\n");
 
   while (current_chunk != NULL) {
     // Process current_chunk
@@ -199,26 +202,7 @@ void print_free_list(){
     printf("-------------------\n");
     current_chunk = get_next_free_chunk(current_chunk);
   }
+  if(current_chunk == NULL){
+    printf("No free list\n");
+  }
 }
-
-// int main(int argc, char* argv[]){
-//   // Chunk* newchunk = create_chunk(2000);
-//   // freelist_insert(newchunk);
-//   // Chunk* newchunk1 = create_chunk(3000);
-//   // freelist_insert(newchunk1);
-//   // Chunk* newchunk2 = create_chunk(4000);
-//   // freelist_insert(newchunk2);
-//   // freelist_insert(create_chunk(4567));
-//   // freelist_insert(create_chunk(16));
-//   // freelist_insert(create_chunk(30));
-
-//   // print_free_list();
-
-//   // printf("alignment test\n");
-//   // int test = 9990;
-//   // printf("initial: %d\n", test);
-//   // printf("aligned: %d\n", alignment(test));
-//   // printf("malloc testing\n");
-//   // my_malloc(8185);
-//   return 0;
-// }
