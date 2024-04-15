@@ -1,0 +1,439 @@
+<TITLE>CS360 Jshell Lab</title>
+
+<body bgcolor=FFFFFF>
+
+<h1>CS360 Jshell Lab</h1>
+
+<LI> <a href=http://web.eecs.utk.edu/~jplank>James S. Plank</a>
+<LI> <a href=http://web.eecs.utk.edu/~jplank/jplank/classes/cs360/>CS360</a>
+<LI> Url: <a href=http://web.eecs.utk.edu/~jplank/jplank/classes/cs360/360/labs/Lab-8-Jshell/index.html>
+                  http://web.eecs.utk.edu/~jplank/jplank/classes/cs360/360/labs/Lab-8-Jshell/index.html</a>
+
+<hr>
+<h3>What you turn in</h3>
+
+You should submit the program <b>jshell.c</b>.  The TA's will compile this with <b>libfdr</b>.
+
+<hr>
+<h3>Introduction</h3>
+
+Time to write a shell.  Your job is to write <b>jshell</b> -- your own
+shell, which is going to be very primitive.  <b>Jsh</b> is like <b>csh / sh / bash</b>:
+It is a command line interpreter that lets you execute commands and 
+redirects their input/output.  
+<p>
+The syntax is not like "regular" shells like <b>sh</b>, <b>bash</b> and <b>csh</b>.
+It is more of a pain to use, but easier to write!
+
+<HR><H3>The command format</H3>
+
+<b>jshell</b> reads lines of text from standard input.  Commands are composed of multiple
+lines.  Here's how to interpret each line (use the fields library):
+
+<UL>
+<LI> Blank line, or a line that begins with a '#': Ignore
+<LI> A line whose first word is "<" -- this should have a single word after it, which you will
+     interpret as a filename. You will redirect standard input from that file to the first
+     child process of the command.
+<LI> A line whose first word is ">" -- this should have a single word after it, which you will
+     interpret as a filename. You will redirect standard output of the last child process in
+     the command, to that file.
+<LI> A line whose first word is ">>" -- this should have a single word after it, which you will
+     interpret as a filename. You will redirect standard output of the last child process in
+     the command, and append to that file.
+<LI> A line composed of the word "NOWAIT".  This means
+     that when you run the command, you will not wait for any of the child processes to exit.
+<LI> A line composed of the word "END".  This means
+     that the command is over and you should go about executing it.
+<LI> Any other line is interpreted as an <b>argv</b> array for a child process in the command.
+     You can specify any number of these, and when you execute the command, each child 
+     process should be connected to the next via pipes -- standard output of child <i>i</i> goes
+     to standard input of child <i>i+1</i>.
+<LI> These lines can be specified in any order; however, when you read "END", you execute the
+     command that you have been reading.
+</UL>
+
+<HR><H3>The first command line argument of my jshell</H3>
+
+My <b>jshell</b> allows you to specify some letters on its first command line argument:
+
+<UL>
+<LI> 'r' -- a "READY" prompt will be printed at the beginning of the program, and after each
+     "END" (after the commands corresponding to that "END" have been executed).
+<LI> 'p' -- Before executing the command, this will print out what the command is.
+<LI> 'n' -- The command will not be executed.  Combine this with 'p' to simply see what the
+     commands are without executing them.
+</UL>
+
+See the examples below for more information about how these are specified and used.
+<p>
+BTW, your shell does not have to implement these. You may want to, to help you with debugging,
+but I won't test them.  Here are some examples:
+
+
+<pre>
+UNIX> <font color=darkred><b>bin/jshell r</b></font>   <font color=blue>    # The 'r' on command line means that it will</font>
+READY                   <font color=blue> # print "READY" when it's ready to receive a command</font>
+<font color=darkred><b>cat f1.txt</b></font>   
+<font color=darkred><b>END</b></font>      <font color=blue>                # You need an "END" line to make it execute the command</font>
+Andrew Sundry
+Brandon Aperiodic
+Gianna Coralberry
+Sydney Roundoff
+Brandon Canvas
+Julia Suffocate
+Amelia Chantey
+Isaiah Aidan Plait
+Lucy Clamp
+Arianna Infant
+READY
+            <font color=blue> # I'm putting an extra line after the READY's to make it easier to read.</font>
+
+<font color=darkred><b>< f1.txt</b></font>    <font color=blue> # Here, we redirect standard input from f1.txt</font>
+<font color=darkred><b>head -n 2</b></font>
+<font color=darkred><b>> f2.txt</b></font>    <font color=blue> # And standard output to f2.txt</font>
+<font color=darkred><b>END</b></font>
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>  <font color=blue> # Here's f2.txt</font>
+<font color=darkred><b>END</b></font>
+Andrew Sundry
+Brandon Aperiodic
+READY
+
+<font color=darkred><b>> f2.txt</b></font>    <font color=blue> # It doesn't matter what order you specify the</font>
+<font color=darkred><b>< f1.txt</b></font>    <font color=blue> # redirections with respect to the commands.</font>
+<font color=darkred><b>head -n 2</b></font>
+<font color=darkred><b>END</b></font>
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+Andrew Sundry
+Brandon Aperiodic
+READY
+
+<font color=darkred><b>head -n 2 f1.txt</b></font>   <font color=blue> # Test appending to a file</font>
+<font color=darkred><b>>> f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+Andrew Sundry
+Brandon Aperiodic
+Andrew Sundry
+Brandon Aperiodic
+READY
+
+<font color=darkred><b>cat -n</b></font>            <font color=blue> # Here's where we pipe together three commands</font>
+<font color=darkred><b>sed s/[a-z]/x/g</b></font>
+<font color=darkred><b>tail -n 2</b></font>
+<font color=darkred><b>< f1.txt</b></font>
+<font color=darkred><b>END</b></font>
+     9	Lxxx Cxxxx
+    10	Axxxxxx Ixxxxx
+READY
+
+<font color=darkred><b>cat sleep_fred.c</b></font>  <font color=blue> # sleep_fred.c sleeps 10 seconds and then </font>
+<font color=darkred><b>END</b></font>               <font color=blue> # prints Fred on standard output.</font>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main()
+{
+  sleep(10);
+  printf("Fred\n");
+  exit(0);
+}
+READY
+
+<font color=darkred><b>gcc sleep_fred.c</b></font>   <font color=blue> # We compile it and run it</font>
+<font color=darkred><b>END</b></font>
+READY
+
+<font color=darkred><b>a.out</b></font>
+<font color=darkred><b>END</b></font>
+Fred        <font color=blue> # You have to wait 10 seconds for it to print Fred.</font>
+READY       <font color=blue> # After 10 seconds, it prints Fred and you get the READY prompt.</font>
+
+<font color=darkred><b>a.out</b></font>       <font color=blue> # Now I run it, but speify NOWAIT</font>
+<font color=darkred><b>NOWAIT</b></font>
+<font color=darkred><b>END</b></font>
+READY       <font color=blue> # I get the prompt back instantly, with no Fred.</font>
+
+<font color=darkred><b>cat f2.txt</b></font>  <font color=blue> # I call this command in under 10 seconds</font>
+<font color=darkred><b>END</b></font>
+Andrew Sundry
+Brandon Aperiodic
+READY
+
+Fred        <font color=blue> # And finally Fred appears.</font>
+     
+<font color=darkred><b>a.out </b></font>      <font color=blue> # I call a.out > f2.txt, but don't wait.</font>
+<font color=darkred><b>> f2.txt</b></font>
+<font color=darkred><b>NOWAIT</b></font>
+<font color=darkred><b>END</b></font>
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>  <font color=blue> # Within 10 seconds, f2.txt has been opened and</font>
+<font color=darkred><b>END</b></font>         <font color=blue> # truncated, but nothing written yet.</font>
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>  <font color=blue> # (Wait 10 seconds): After 10 seconds, f2.txt contains "Fred".</font>
+<font color=darkred><b>END</b></font>
+Fred
+READY
+
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX>
+</pre>
+
+When you call my <b>jshell</b> and include 'p' in the first argument, it will print information
+about the command:
+
+<pre>
+UNIX><font color=darkred><b> bin/jshell rp</b></font>
+READY
+<font color=darkred><b>cat f1.txt</b></font>
+<font color=darkred><b>END</b></font>
+Stdin:   None                 <font color=blue> # After each command, you can see my internal data structure.</font>
+Stdout:  None (Append=0)
+N_Commands:  1
+Wait:        1
+  0: argc: 2   argv: cat f1.txt
+
+Andrew Sundry
+Brandon Aperiodic
+Gianna Coralberry
+Sydney Roundoff
+Brandon Canvas
+Julia Suffocate
+Amelia Chantey
+Isaiah Aidan Plait
+Lucy Clamp
+Arianna Infant
+READY
+
+<font color=darkred><b>cat -n</b></font>
+<font color=darkred><b>sed s/[a-z]/x/g</b></font>
+<font color=darkred><b>tail -n 2</b></font>
+<font color=darkred><b>< f1.txt</b></font>
+<font color=darkred><b>> f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+Stdin:   f1.txt
+Stdout:  f2.txt (Append=0)
+N_Commands:  3
+Wait:        1
+  0: argc: 2   argv: cat -n
+  1: argc: 2   argv: sed s/[a-z]/x/g
+  2: argc: 3   argv: tail -n 2
+
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+Stdin:   None
+Stdout:  None (Append=0)
+N_Commands:  1
+Wait:        1
+  0: argc: 2   argv: cat f2.txt
+
+     9	Lxxx Cxxxx
+    10	Axxxxxx Ixxxxx
+READY
+
+<font color=darkred><b>head -n 1 f1.txt </b></font>
+<font color=darkred><b>>> f2.txt</b></font>
+END
+Stdin:   None
+Stdout:  f2.txt (Append=1)
+N_Commands:  1
+Wait:        1
+  0: argc: 4   argv: head -n 1 f1.txt
+
+READY
+
+<font color=darkred><b>cat f2.txt</b></font>
+<font color=darkred><b>END</b></font>
+Stdin:   None
+Stdout:  None (Append=0)
+N_Commands:  1
+Wait:        1
+  0: argc: 2   argv: cat f2.txt
+
+     9	Lxxx Cxxxx
+    10	Axxxxxx Ixxxxx
+Andrew Sundry
+READY
+
+<font color=darkred><b>NOWAIT  </b></font>
+<font color=darkred><b>a.out</b></font>
+<font color=darkred><b>END</b></font>
+Stdin:   None
+Stdout:  None (Append=0)
+N_Commands:  1
+Wait:        0
+  0: argc: 1   argv: a.out
+
+READY
+Fred           <font color=blue> # This comes 10 seconds later</font>
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX> 
+</pre>
+
+<HR><H3>You don't have to implement the first command line argument</H3>
+
+The gradescripts do not call <b>jshell</b> with a command line argument, so you don't have
+to implement 'r', 'p' or 'n'.  However, were I you, I would.  They don't have to match mine, but
+they are useful for code development and debugging.
+
+<HR><H3>Some General Advice</H3>
+
+<h4>Incremental Programming</h4>
+
+I would program in the following order:
+
+<UL>
+<LI> Executing one command.
+<LI> Implementing NOWAIT
+<LI> Redirecting stdin.
+<LI> Redirecting stdout with ">".
+<LI> Redirecting stdout with ">>".
+<LI> Pipes
+</UL>
+
+Remember -- program slowly and test, test, test.  Think of things you should test, and then
+test them.  Don't try to have the gradescripts be your debugger -- you'll be more efficient
+thinking of things to test and testing them on your own before you move to the gradescripts.
+
+<h4>Flush before fork</h4>
+
+Before you call fork, you should call <b>fflush()</b> on
+stdin, stdout and stderr.  Trust me.
+
+<h4>Zombies</h4>
+
+You should try to minimize the number of zombie processes that will
+exist (this is in all parts).  This is not to say that they can't
+exist for a little while, but not forever.
+When you call <b>wait()</b> for a shell
+command, it might return the pid of a zombie process, and not the
+process you thought would return.  This is fine --- you just have
+to be able to deal with it.  (i.e. consider the following sequence):
+
+<pre>
+<font color=darkred><b>cat f1</b></font>
+<font color=darkred><b>> /dev/null</b></font>
+<font color=darkred><b>NOWAIT</b></font>
+<font color=darkred><b>END</b></font>
+<font color=darkred><b></b></font>
+<font color=darkred><b>vi lab3.c</b></font>
+<font color=darkred><b>END</b></font>
+</pre>
+
+You are going to call <b>wait()</b> to wait for the <b>vi</b> command to
+terminate, but
+it will return with the status of the zombie process from the <b>cat</b> call.
+This is all fine -- you just need to be aware that these things may
+happen, and that you may have to call <b>wait()</b> again to wait for
+<b>vi</b> to complete.
+
+<h4>Open files</h4>
+
+You must make sure that when you call <b>execvp</b>, that there are only
+three files open -- 0, 1, and 2.  If there are others open, then you have
+a bug in your shell.
+<p>
+Also, when a command is done, and the shell prints out its prompt, then
+it should only have three files open -- 0, 1, and 2.  Otherwise, you have
+forgotten to close a file descriptor or two and have a bug in your
+code.  Check for this.   My <b>jshell</b> never uses a file descriptor
+higher than 5.
+
+<h4>Waiting in <b>jshell</b></h4>
+
+If you do not specify "NOWAIT", then your shell
+should not continue until <i>all</i> the processes in the pipe have
+completed.  You'll need a red-black tree for this.
+
+<h4>Errors</h4>
+
+Your code should work in the face of errors. For example, if you
+specify a bad output file at the end of a multi-stage pipe, then
+the error should be noted, and your shell should continue working.
+Make sure you check for all the error conditions that you can
+think of.
+
+<hr>
+<h3>The Gradescripts</h3>
+
+<UL>
+<LI> The first 5 gradescripts test single commands.
+<LI> The next 15 test NOWAIT.
+<LI> The next 40 test redirection.
+<LI> The next 40 test everything.
+</UL>
+
+As I said above, you'll do better to develop your own testing code than to use
+the gradescripts when you develop code.  The gradescripts make use of the following
+programs, which are in the lab directory:
+
+
+<UL>
+<LI> <b>cattostde.c</b>: This works like <b>cat</b>, but it prints what it receives
+on  standard input, or on its input files to standard error.
+<LI> <b>strays.c</b>: This checks for open file descriptors and will flag an error if any file descriptor
+higher than three is open.  Then it works just like <b>cat</b>
+<LI> <b>strays-files.c</b>: This works like <b>strays</b> except it copies the first argument to the second.
+<LI> <b>strays-fsleep.c</b>: This works like <b>strays-files</b> except it sleeps for a 5th of a second before starting.
+<LI> <b>strays-sleep.c</b>: This works like <b>strays</b> except it sleeps for a 5th of a second before starting.
+</UL>
+
+The gradescripts use all of these to test various features of your
+shells.  Beside the first few gradescripts,
+each gradescript call will take between 1 and 20 seconds.
+The gradescripts are time sensitive, too, so the output of
+your program may change as time passes -- for that reason, the
+gradescripts can be a little hard to parse.   
+<p>
+To help you out, I have made videos to explain gradescripts 6, 21 and 61.
+They are here:
+
+<UL>
+<LI> Gradescript 6: <a href=https://youtu.be/5bncxZZkzmU>https://youtu.be/5bncxZZkzmU</a>
+<LI> Gradescript 21: <a href=https://youtu.be/DmRRy_h3TY4>https://youtu.be/DmRRy_h3TY4</a>
+<LI> Gradescript 61: <a href=https://youtu.be/ndeR8cdct6c>https://youtu.be/ndeR8cdct6c</a>
+</UL>
+
+<hr>
+<h3> My command data structure </h3>
+
+You don't have to use this data structure, but I put this here in case you'll find it
+helpful.  This was the data structure that I used to store a command:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+typedef struct {
+  char *stdin;          <font color=blue>/* Filename from which to redirect stdin.  NULL if empty.*/ </font>
+  char *stdout;         <font color=blue>/* Filename to which to redirect stdout.  NULL if empty.*/ </font>
+  int append_stdout;    <font color=blue>/* Boolean for appending.*/ </font>
+  int wait;             <font color=blue>/* Boolean for whether I should wait.*/ </font>
+  int n_commands;       <font color=blue>/* The number of commands that I have to execute*/ </font>
+  int *argcs;           <font color=blue>/* argcs[i] is argc for the i-th command*/ </font>
+  char ***argvs;        <font color=blue>/* argcv[i] is the argv array for the i-th command*/ </font>
+  Dllist comlist;       <font color=blue>/* I use this to incrementally read the commands.*/ </font>
+} Command;
+</pre></td></table></center><p>
+
+A little commentary -- before I read END, I put commands into <b>comlist</b>, and keep 
+track of the number of commands with <b>n_commands</b>.  I build the
+<b>argv</b> array when I read the command, and that's what I put onto the <b>comlist</b>.
+<p>
+When I read <b>END</b>, I create <b>argcs</b> and <b>argvs</b> from <b>comlist</b>, and then
+delete <b>comlist</b>. Since I'm storing the actual <b>argv</b> arrays in <b>comlist</b>, this
+is a very simply process of calculating <b>argc</b>, and then copying the pointer to the
+<b>argv</b> array.  
+<p>
+I have a procedure <b>free_command()</b> that frees everything in the data structure at the end
+of every command.  I use this to handle errors while reading.
