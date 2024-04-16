@@ -4,8 +4,6 @@
 //How should i implement execute_command
 
 //TODO
-//-finish struct populating
-//-finishes r,p,n flags
 //-run single commands
 
 //includes
@@ -52,16 +50,18 @@ void null_set(Command* c){
 
 void print_command(Command* c){
     Dllist tmp;
-    printf("stdin: %s\n", c->stdin);
-    printf("stdout: %s\n", c->stdout);
-    printf("append stdout: %d\n", c->append_stdout);
-    printf("wait: %d\n", c->wait);
-    printf("num commands: %d\n", c->n_commands);
-    //print argc array
-    //print array of argvs
-    //print comlist
-    dll_traverse(tmp, c->comlist){
-        printf("command: %s", tmp->val.s);
+    printf("Stdin: \t%s\n", c->stdin);
+    printf("Stdout: %s\t(Append=%d)\n", c->stdout, c->append_stdout);
+    printf("Wait: \t%d\n", c->wait);
+    printf("Num commands: \t%d\n", c->n_commands);
+    //print array of argvs and argc for each command
+    for(int i = 0; i < c->n_commands; i++){
+        printf("Command %d:\n", i+1);
+        printf("argc: \t%d\n", c->argcs[i]);
+        printf("argv[]:\n");
+        for(int j = 0; j < c->argcs[i]; j++){
+            printf("\t%d: %s\n", j, c->argvs[i][j]);
+        }
     }
 }
 
@@ -101,16 +101,7 @@ int main(int argc, char* argv[]){
             continue;
         }
         else if(strcmp(temp, "END") == 0){
-            Dllist tmp;
-            
-            //create argcs and argvs from comlist
-            dll_traverse(tmp, c->comlist){
-                //traverse each string and pull argc and argv
-                //populate struct
-            }
-
             //delete comlist
-
 
             //pass struct to execute command
             //execute_command(c);
@@ -145,9 +136,19 @@ int main(int argc, char* argv[]){
         }
         else{
             //increments num of commands
-            c->n_commands++;
-            //should store entire command string in comlist
+            c->argvs = (char***)realloc(c->argvs, (c->n_commands + 1) * sizeof(char**));
+            // Allocate memory for the new command
+            c->argvs[c->n_commands] = (char**)malloc((is->NF + 1) * sizeof(char *));
+            // Copy arguments for the new command
+            for (int i = 0; i < is->NF; i++) {
+                c->argvs[c->n_commands][i] = strdup(is->fields[i]);
+            }
+            c->argvs[c->n_commands][is->NF] = NULL; 
+            c->argcs = (int*)realloc(c->argcs, (c->n_commands + 1) * sizeof(int));
+            c->argcs[c->n_commands] = is->NF;
+
             dll_append(c->comlist, new_jval_s(strdup(is->text1)));
+            c->n_commands++;
         }
     }
     return 0;
