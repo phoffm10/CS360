@@ -3,6 +3,7 @@ CC = gcc
 INCLUDES = -I/home/jplank/cs360/include
 LIBDIR = /home/jplank/cs360/lib
 
+# CFLAGS = $(INCLUDES) -g -fsanitize=address
 CFLAGS = $(INCLUDES)
 LIBS = $(LIBDIR)/libfdr.a
 
@@ -33,3 +34,6 @@ bin/strays-fsleep: src/strays-fsleep.c
 
 bin/strays-sleep: src/strays-sleep.c
 	$(CC) -o bin/strays-sleep src/strays-sleep.c
+
+clean:
+	rm -f bin/jshell

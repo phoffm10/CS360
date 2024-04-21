@@ -73,19 +73,24 @@ void print_command(Command* c){
 void execute_command(Command* c){
     //needs to actually execute commands here---
     JRB pids;
+    JRB tmp;
     int new_fd;
     pids = make_jrb();
     int pid;
+
     for(int i = 0; i < c->n_commands; i++){
+
         int pipes[128][2];
+        fflush(stdout);
+        fflush(stderr);
+        fflush(stdin);
         pid = fork();
         if (pid == 0) {
             if(c->stdin && i == 0){
                 close(STDIN_FILENO);
                 // Opening WITHOUT append
                 new_fd = open(c->stdin, O_WRONLY | O_TRUNC | O_CREAT);
-                // Opening WITH append
-                new_fd = open(c->stdin, O_WRONLY | O_APPEND | O_CREAT);
+
                 dup2(new_fd, STDIN_FILENO);
             }
             else if (i != 0){
@@ -94,7 +99,25 @@ void execute_command(Command* c){
             }
             if(c->stdout && i == c->n_commands - 1){
                 close(STDOUT_FILENO);
+                if(c->append_stdout){
+                new_fd = open(c->stdout, O_WRONLY | O_APPEND | O_CREAT);
+                if (new_fd < 0) {
+                    perror(c->stdout);
+                    exit(2);
+                }
+                    // fd2 = open("f2.txt", O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                    // if (fd2 < 0) {
+                    // perror("catf1f2: f2.txt");
+                    // exit(2);
+                    // }
+                }
+                else{
                 new_fd = open(c->stdout, O_WRONLY | O_TRUNC | O_CREAT);
+                if (new_fd < 0) {
+                    perror(c->stdout);
+                    exit(2);
+                }
+                }
                 dup2(new_fd, STDOUT_FILENO);
             }
             else if (i != c->n_commands - 1){
@@ -102,24 +125,32 @@ void execute_command(Command* c){
                 dup2(pipes[i][1], STDOUT_FILENO); // Pipe the last programs STDOUT into this programs STDIN
             }
             execvp(c->argvs[i][0], c->argvs[i]);
+            perror(c->argvs[i][0]);
+            exit(1); 
+                // execve("/bin/cat", newargv, envp);
+                // perror("execve(bin/cat, newargv, envp)");
+                // exit(1); 
         }
         else{
-            if(!c->wait){
+            if(c->wait){
                 jrb_insert_int(pids, pid, new_jval_i(pid));
                 //add pid to tree
             }
         }
     }
     //this doesnt work
-    if(!c->wait){
+    if(c->wait){
         while(!jrb_empty(pids)){
-            JRB tmp;
-            //remove pid from tree
-            jrb_traverse(tmp, pids){
-                tmp->key.i = wait(NULL);
-                jrb_delete_node(jrb_find_int(pids, tmp->key.i));
+            int tpid;
+            int status;
+            tpid = (int)wait(&status); // Wait for specific child process to terminate
+            if(tpid == -1){
+                break;
             }
-
+            tmp = jrb_find_int(pids, tpid);
+            if(tmp != NULL){
+                jrb_delete_node(tmp);
+            }
         }
     }
     //------------------------------------------
@@ -157,6 +188,10 @@ int main(int argc, char* argv[]){
     while(get_line(is) != -1){
         temp = is->fields[0];
         if(temp[0] == '#'){
+            //printf("ignoring\n");
+            continue;
+        }
+        if(is->NF == 0){
             //printf("ignoring\n");
             continue;
         }
