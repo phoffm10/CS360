@@ -1,11 +1,5 @@
 //Peter Hoffman
-
-//Qs
-//How should i implement execute_command
-//how do i implement pipes, how does the order not matter?
-
-//TODO
-//-run single commands
+//Lab 8 - jshell
 
 //includes
 #include <stdio.h>
@@ -69,92 +63,124 @@ void print_command(Command* c){
     }
 }
 
+void err_print_command(Command* c){
+    Dllist tmp;
+    fprintf(stderr, "Stdin: \t%s\n", c->stdin);
+    fprintf(stderr, "Stdout: %s\t(Append=%d)\n", c->stdout, c->append_stdout);
+    fprintf(stderr, "Wait: \t%d\n", c->wait);
+    fprintf(stderr, "Num commands: \t%d\n", c->n_commands);
+    //print array of argvs and argc for each command
+    for(int i = 0; i < c->n_commands; i++){
+        fprintf(stderr, "Command %d:\n", i+1);
+        fprintf(stderr, "argc: \t%d\n", c->argcs[i]);
+        fprintf(stderr, "argv[]:\n");
+        for(int j = 0; j < c->argcs[i]; j++){
+            fprintf(stderr, "\t%d: %s\n", j, c->argvs[i][j]);
+        }
+    }
+}
+
 //execute command function
 void execute_command(Command* c){
-    //needs to actually execute commands here---
     JRB pids;
     JRB tmp;
+    Dllist dpids, dtmp;
+    dpids = new_dllist();
     int new_fd;
+    int prev_pipe = 0;
     pids = make_jrb();
-    int pid;
+    int pipes[c->n_commands - 1][2];
+    pid_t pid;
 
     for(int i = 0; i < c->n_commands; i++){
 
-        int pipes[128][2];
+        if (i < c->n_commands - 1) {
+            if (pipe(pipes[i]) == -1) {
+                perror("pipe");
+                exit(1);
+            }
+        }
         fflush(stdout);
         fflush(stderr);
         fflush(stdin);
         pid = fork();
         if (pid == 0) {
-            if(c->stdin && i == 0){
-                close(STDIN_FILENO);
-                // Opening WITHOUT append
-                new_fd = open(c->stdin, O_WRONLY | O_TRUNC | O_CREAT);
+            if(c->stdin != NULL){
+                if(i == 0){
+                    new_fd = open(c->stdin, O_RDONLY);
+                    if(new_fd == -1){
+                        perror("STDIN");
+                        exit(1);
+                    }
+                    if(dup2(new_fd, 0) == -1){
+                        perror("STDIN DUP");
+                        close(new_fd);
+                        exit(1);
+                    }
+                    close(new_fd);
+                }
+            }
+            if(c->stdout != NULL){
+                if(i == (c->n_commands - 1)){
+                    if(c->append_stdout == true){
+                        new_fd = open(c->stdout, O_WRONLY | O_APPEND | O_CREAT, 0644);
+                    }
+                    else{
+                        new_fd = open(c->stdout, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                    }
+                    if(new_fd < 0){
+                        perror("STDOUT");
+                        exit(1);
+                    }
+                    if(dup2(new_fd, 1) == -1){
+                        perror("STDOUT DUP");
+                        close(new_fd);
+                        exit(1);
+                    }
+                    close(new_fd);
+                }
+            }
 
-                dup2(new_fd, STDIN_FILENO);
-            }
-            else if (i != 0){
-                close(STDERR_FILENO);
-                dup2(pipes[i-1][0], STDIN_FILENO); // Pipe the last programs STDOUT into this programs STDIN
-            }
-            if(c->stdout && i == c->n_commands - 1){
-                close(STDOUT_FILENO);
-                if(c->append_stdout){
-                new_fd = open(c->stdout, O_WRONLY | O_APPEND | O_CREAT);
-                if (new_fd < 0) {
-                    perror(c->stdout);
-                    exit(2);
-                }
-                    // fd2 = open("f2.txt", O_WRONLY | O_TRUNC | O_CREAT, 0644);
-                    // if (fd2 < 0) {
-                    // perror("catf1f2: f2.txt");
-                    // exit(2);
-                    // }
-                }
-                else{
-                new_fd = open(c->stdout, O_WRONLY | O_TRUNC | O_CREAT);
-                if (new_fd < 0) {
-                    perror(c->stdout);
-                    exit(2);
-                }
-                }
-                dup2(new_fd, STDOUT_FILENO);
-            }
-            else if (i != c->n_commands - 1){
-                close(STDOUT_FILENO);
-                dup2(pipes[i][1], STDOUT_FILENO); // Pipe the last programs STDOUT into this programs STDIN
-            }
             execvp(c->argvs[i][0], c->argvs[i]);
             perror(c->argvs[i][0]);
             exit(1); 
-                // execve("/bin/cat", newargv, envp);
-                // perror("execve(bin/cat, newargv, envp)");
-                // exit(1); 
         }
-        else{
-            if(c->wait){
+        else if (pid > 0){
+        //else{
+            if(c->wait == true){
+                //printf("pid: %d\n", pid);
                 jrb_insert_int(pids, pid, new_jval_i(pid));
                 //add pid to tree
             }
-        }
-    }
-    //this doesnt work
-    if(c->wait){
-        while(!jrb_empty(pids)){
-            int tpid;
-            int status;
-            tpid = (int)wait(&status); // Wait for specific child process to terminate
-            if(tpid == -1){
-                break;
-            }
-            tmp = jrb_find_int(pids, tpid);
-            if(tmp != NULL){
-                jrb_delete_node(tmp);
+            else{
+                if(i > 0){
+                    close(pipes[i - 1][0]);
+                    close(pipes[i - 1][1]);
+                }
             }
         }
+        else{
+            perror("fork");
+            exit(1);
+        }
     }
-    //------------------------------------------
-    null_set(c);
+    while (c->wait && wait(NULL) != pid);
+    // if(c->wait == true){
+    //     while(!jrb_empty(pids)){
+    //         int tpid;
+    //         int status;
+    //         tpid = wait(&status);
+    //         if(tpid == -1){
+    //             // perror("wait");
+    //             break;
+    //         }
+    //         tmp = jrb_find_int(pids, tpid);
+    //         if(tmp != NULL){
+    //             jrb_delete_node(tmp);
+    //         }       
+    //     }
+    // }
+    //null_set(c);
 }
 //main
 int main(int argc, char* argv[]){
@@ -188,11 +214,9 @@ int main(int argc, char* argv[]){
     while(get_line(is) != -1){
         temp = is->fields[0];
         if(temp[0] == '#'){
-            //printf("ignoring\n");
             continue;
         }
         if(is->NF == 0){
-            //printf("ignoring\n");
             continue;
         }
         else if(strcmp(temp, "END") == 0){
@@ -200,13 +224,13 @@ int main(int argc, char* argv[]){
 
             if(print){
                 print_command(c);
+                err_print_command(c);
             }
             //pass struct to execute command
             if(!no_command){
                 execute_command(c);
+                null_set(c);
             }
-
-            //printf("read END\n");
             if(ready){
                 printf("READY\n");
             }            
@@ -214,30 +238,20 @@ int main(int argc, char* argv[]){
         else if(strcmp(temp, "NOWAIT") == 0){
             //Flag nowait
             c->wait = false;
-            //printf("read NOWAIT\n");
         }
         else if(strcmp(temp, "<") == 0){
             //Set redirect
             c->stdin = strdup(is->fields[1]);
-            //printf("read <\n");
-            //printf("stdin is: %s\n", is->fields[1]);
         }
         else if(strcmp(temp, ">") == 0){
             //set redirect
             c->stdout = strdup(is->fields[1]);
-            //printf("read >\n");
-            //printf("stdout is: %s\n", is->fields[1]);
         }
         else if(strcmp(temp, ">>") == 0){
             //set redirect
             c->append_stdout = true;
-            //printf("read >>\n");
-            //printf("stdout append is: %s\n", is->fields[1]);
+            c->stdout = strdup(is->fields[1]);
         }
-        // else if(strcmp(temp, "PRINTC") == 0){
-        //     //Print command
-        //     print_command(c);
-        // }
         else{
             //increments num of commands
             c->argvs = (char***)realloc(c->argvs, (c->n_commands + 1) * sizeof(char**));
