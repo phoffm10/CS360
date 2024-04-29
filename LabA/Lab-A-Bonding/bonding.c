@@ -18,6 +18,28 @@ struct global_info {
   int o;
 };
 
+typedef struct atom{
+  int id;
+  int h1;
+  int h2;
+  int o;
+  pthread_cond_t *cond;
+}atom;
+
+//Globals
+int ready_hydrogen = 0;
+int ready_oxygen = 0;
+
+void set_atom_args(atom *h1, atom *h2, atom *o){
+  h1->h1 = h2->h1 = o->h1 = h1->id;
+  h1->h2 = h2->h2 = o->h2 = h2->id;
+  h1->o = h2->o = o->o = o->id;
+}
+
+void free_atom(atom *atom){
+  pthread_cond_destroy(atom->cond);
+  free(atom);
+}
 void *initialize_v(char *verbosity)
 {
   struct global_info *g;
@@ -35,6 +57,7 @@ void *initialize_v(char *verbosity)
 
 void *hydrogen(void *arg)
 {
+  
   struct bonding_arg *a;
   struct global_info *g;
   char *rv;
@@ -44,45 +67,47 @@ void *hydrogen(void *arg)
 
   pthread_mutex_lock(g->lock);
 
+  atom *tmp_h = (atom *)malloc(sizeof(atom));
+  tmp_h->id = a->id;
+  tmp_h->cond = new_cond();
+  ready_hydrogen++;
   //if there is one hydrogen and one oxygen in waiting lists
   //new hydrogen then completes the bond
-  if((dll_first(g->waiting_hydrogen) != NULL) && (dll_first(g->waiting_oxygen) != NULL)){
-    //sets g->h1 to current atom
-    g->h1 = a->id;
+  if(ready_hydrogen >= 2 && ready_oxygen >= 1){
 
-    //gets next hydrogen from list, sets g->h2
-    Dllist tmp1 = dll_first(g->waiting_hydrogen);
-    int tmp_h = tmp1->val.i;
-    g->h2 = tmp_h;
+    //gets next hydrogen from list
+    atom *h2 = dll_first(g->waiting_hydrogen)->val.v;
 
-    //gets next hydrogen from list, sets g->h2
-    Dllist tmp2 = dll_first(g->waiting_oxygen);
-    int tmp_o = tmp2->val.i;
-    g->o = tmp_o;
+    //gets next oxygen from list
+    atom *o = dll_first(g->waiting_oxygen)->val.v;
+
+    //set args
+    set_atom_args(tmp_h, h2, o);
 
     //remove hydrogen and oxygen from lists
     dll_delete_node(dll_first(g->waiting_hydrogen));
+    ready_hydrogen -= 2;
     dll_delete_node(dll_first(g->waiting_oxygen));
+    ready_oxygen--;
 
-    pthread_cond_signal(g->cond);
+    pthread_cond_signal(h2->cond);
+    pthread_cond_signal(o->cond);
   }
   //cannot form bond, add atom to list
   else{
-    dll_append(g->waiting_hydrogen, new_jval_i(a->id));
+    dll_append(g->waiting_hydrogen, new_jval_v(tmp_h));
     //wait until signaled
-    pthread_cond_wait(g->cond, g->lock);
+    pthread_cond_wait(tmp_h->cond, g->lock);
   }
 
+  //where do i put this
   // Check if bonding is possible
-  if (g->h1 != -1 && g->h2 != -1 && g->o != -1) {
-    // Bonding is possible, call Bond()
-    rv = Bond(g->h1, g->h2, g->o);
-    pthread_mutex_unlock(g->lock);
-    return (void *) rv;
-  }
-
+  // Bonding is possible, call Bond()
   pthread_mutex_unlock(g->lock);
-  return NULL;
+  rv = Bond(tmp_h->h1, tmp_h->h2, tmp_h->o);
+  return (void *) rv;
+  //free atom struct
+
 }
 
 void *oxygen(void *arg)
@@ -96,44 +121,41 @@ void *oxygen(void *arg)
 
   pthread_mutex_lock(g->lock);
 
+  atom *tmp_o = (atom *)malloc(sizeof(atom));
+  tmp_o->id = a->id;
+  tmp_o->cond = new_cond();
+  ready_oxygen++;
   //if there is two hydrogens in waiting list
   //new oxygen then completes the bond
-  if((dll_first(g->waiting_hydrogen->flink) != NULL)){
-    //sets g->o to current atom
-    g->o = a->id;
+  if(ready_hydrogen >= 2 && ready_oxygen >= 1){
+    
+    //gets next hydrogen atom
+    atom *h1 = dll_first(g->waiting_hydrogen)->val.v;
 
-    //gets next hydrogen from list, sets g->h1
-    Dllist tmp1 = dll_first(g->waiting_hydrogen);
-    int tmp_h1 = tmp1->val.i;
-    g->h1 = tmp_h1;
+    //gets next oxygen from list
+    atom *h2 = dll_first(g->waiting_hydrogen)->flink->val.v;
 
-    //gets second hydrogen from list, sets g->h2
-    Dllist tmp2 = dll_first(g->waiting_hydrogen->flink);
-    int tmp_h2 = tmp2->val.i;
-    g->h2 = tmp_h2;
+    //set args
+    set_atom_args(h1, h2, tmp_o);
 
     //remove hydrogen 1 and 2 from lists
-    dll_delete_node(dll_first(g->waiting_hydrogen->flink));
+    dll_delete_node(dll_first(g->waiting_hydrogen)->flink);
     dll_delete_node(dll_first(g->waiting_hydrogen));
+    ready_hydrogen -= 2;
+    ready_oxygen--;
 
-    pthread_cond_signal(g->cond);
+    pthread_cond_signal(h1->cond);
+    pthread_cond_signal(h2->cond);
   }
   //cannot form bond, add atom to list
   else{
-    dll_append(g->waiting_oxygen, new_jval_i(a->id));
+    dll_append(g->waiting_oxygen, new_jval_v(tmp_o));
     //wait until signaled
-    pthread_cond_wait(g->cond, g->lock);
+    pthread_cond_wait(tmp_o->cond, g->lock);
   }
-
-
   // Check if bonding is possible
-  if (g->h1 != -1 && g->h2 != -1 && g->o != -1) {
-    // Bonding is possible, call Bond()
-    rv = Bond(g->h1, g->h2, g->o);
-    pthread_mutex_unlock(g->lock);
-    return (void *) rv;
-  }
-
+  // Bonding is possible, call Bond()
   pthread_mutex_unlock(g->lock);
-  return NULL;
+  rv = Bond(tmp_o->h1, tmp_o->h2, tmp_o->o);
+  return (void *) rv;
 }
