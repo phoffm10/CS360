@@ -1,0 +1,749 @@
+<title>CS360 Lab B -- The Bonding Lab</title>
+
+<h1>CS360 Lab B -- The Bonding Lab</h1>
+<UL>
+<h3>
+<LI> James S. Plank
+<LI> CS360
+</h3>
+</UL>
+<hr>
+
+The layout of this lab is like
+<a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/notes/Thread-3-Condition/lecture.html>printer simulation lecture</a>.
+I have written a driver program and a header file.  These are in
+<b><a href=bonding-driver.c>bonding-driver.c</a></b>
+and
+<b><a href=bonding.h>bonding.h</a></b>.  You are not allowed to modify these
+files.  These drive a simulation of a system with a bunch of hydrogen and oxygen atoms.  
+Each of these atoms is its own thread.  What we want to have happen is to have each 
+atom "bond" with two others to create a molecule.  The bonding has to be such that two
+hydrogen atoms bond with one oxygen atom (and thereby make a water molecule).  
+You'll create the file <b>bonding.c</b>, which uses 
+mutexes and condition variables to make this work.
+<hr>
+<h3>bonding.h and simulation parameters</h3>
+
+When you compile <b>bonding-driver.cpp</b> and <b>bonding.c</b> (which you write) into an executable,
+it runs with the following parameters:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+usage: bonding seed num_molecules max_outstanding verbosity
+</pre></td></table></center><p>
+
+<UL>
+<LI> <b>seed</b> is an integer, which seeds <b>srand()</b>.
+<LI> <b>num_molecules</b> is the total number of water molecules that you'll make in the simulation.
+<LI> <b>max_outstanding</b> is the maximum number of simultaneous atom threads that can be alive at one
+     time.  If <b>num_molecules</b> is one, then this should be three.  Otherwise, it can have any value
+     from 6 to 1000.
+<LI> <b>verbosity</b> is a string.  I'll describe it more below.
+</UL>
+
+Now, what <b>bonding-driver</b> does is the following.  It creates two threads -- a <b>creator</b> thread and
+a <b>joiner</b> thread.  The <b>creator</b> thread will create hydrogen and oxygen threads with <b>pthread_create()</b>.
+It makes sure that maximum of <b>max_outstanding</b> threads are running at a time.  It also makes sure that of
+the outstanding threads, you can create a maximum number of water molecules.  In other words, if there are
+10 outstanding threads, you can be assured that at least 6 of them are hydrogen and at least 3 are oxygen.
+When hydrogen and oxygen threads return, they are cleaned up by the <b>joiner</b> thread, and that frees up
+the <b>creator</b> thread to create more threads.  The <b>creator</b> thread waits until there are at most
+<b>max_outstanding/2</b> outstanding threads, and then it goes ahead and creates more threads.
+<p>
+Hydrogen threads are created by the <b>creator</b> thread calling <b>pthread_create()</b> on the procedure
+<b>hydrogen</b> (which you are to write).  
+Oxygen threads are created by the <b>creator</b> thread calling <b>pthread_create()</b> on the procedure
+<b>oxygen</b> (which you are also to write).  The argument to each of these is of type <b>struct bonding arg *</b>.
+This contains an id for the thread (id's start with 0 for the first thread, and are numbered consecutively), and
+a <b>(void *)</b>, which where you store your data.   Let's take a look at
+<b><a href=bonding.h>bonding.h</a></b> for a little more detail:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* CS360 Lab B - Bonding.
+   Header file bonding.h
+   James S. Plank
+   April, 2017.
+
+   This file contains the common material and prototypes
+   for the Bonding lab.
+*/</font>
+
+#include &lt;pthread.h&gt;
+
+<font color=blue>/* This is the argument to hydrogen and oxygen threads. */</font>
+
+struct bonding_arg {
+  int id;
+  void *v;
+};
+
+<font color=blue>/* You are to write these three procedures. */</font>
+
+void *initialize_v(char *verbosity);
+void *hydrogen(void *arg);
+void *oxygen(void *arg);
+
+<font color=blue>/* When two hydrogen threads and one oxygen thread have bonded
+   to create a water molecule, each of them should call Bond()
+   with the exact same arguments. This will return a string.
+   Each thread should return the string. */</font>
+
+char *Bond(int h1, int h2, int o);
+
+<font color=blue>/* I've written these for you.  They are convenient: */</font>
+
+pthread_mutex_t *new_mutex();             <font color=blue>/* Allocates, initializes and returns a new mutex. */</font>
+pthread_cond_t  *new_cond();              <font color=blue>/* Allocates, initializes and returns a new condition variable. */</font>
+void print_state(char c, const char *s);  <font color=blue>/* Prints the character, the system state, and the string. */</font>
+</pre></td></table></center><p>
+
+You can see the type specification of <b>struct bonding_arg</b>, and the three procedures that you are
+to write with this lab:
+
+<UL>
+<LI> <b>initialize_v()</b> is where you allocate and initialize your data for this lab.  It is just like the
+<b>initialize_v()</b> calls in the printer simulation and the dining philosophers lecture.    This is the 
+<b>(void *)</b> that is passed to the hydrogen and oxygen threads.  The argument to <b>initialize_v()</b>
+is the <b>verbosity</b> string.  That lets you put in some print statements that you turn "on" and "off" 
+at runtime.
+<p>
+<LI> <b>hydrogen()</b> -- this is the hydrogen thread.
+<p>
+<LI> <b>oxygen()</b> -- this is the oxygen thread.
+</UL>
+
+The procedure <b>Bond()</b> is implemented in <b>bonding-driver.cpp</b>.  This is what each thread calls when it
+makes a bond.  Thus, for each bond, three threads will make identical calls to <b>Bond()</b>.  The arguments of this
+call are the thread numbers of the first hydrogen thread, the second hydrogen thread, and the oxygen thread.
+Again, these arguments need to match for all three calls by all three threads in a bond.  The <b>Bond()</b> call
+is going to double-check a bunch of things, and if everything is ok, it will return a string to each caller.
+The string will be the same string (but different copies).  At that point, the thread that called <b>Bond()</b>
+should exit, (either via <b>return</b> or <b>pthread_exit()</b>), returning the string that was returned from 
+<b>Bond()</b>.  At that point, the joiner thread will join with it and double-check that the return value was
+ok.
+
+<p>
+You'll note that there are three helper functions in the header file, that are implemented in <b>bonding-driver.c</b>.
+These are:
+
+<UL>
+<LI> <b>new_mutex()</b> -- allocates and initializes a <b>pthread_mutex_t</b>.
+<LI> <b>new_cond()</b> -- allocates and initializes a <b>pthread_cond_t</b>.
+<LI> <b>print_state(char c, const char *s)</b>.  This prints the character, then it prints the state of the simulation
+in terms of threads created, threads joined, hydrogen threads and oxygen threads, and then it prints the string.
+This is convenient for printing information, and I urge you to use it while you are debugging.
+</UL>
+
+<hr>
+<h3>Verbosity</h3>
+
+I have written <b>bonding-driver.c</b> so that:
+
+<UL>
+<LI> If the <b>verbosity</b> string has a 'C', then it will print out information about creating threads.
+<LI> If the <b>verbosity</b> string has a 'J', then it will print out information about joining threads.
+<LI> If the <b>verbosity</b> string has a 'B', then it will print out information when <b>Bond()</b> is called.
+</UL>
+
+You can put other things into <b>verbosity</b> for when you debug.  I'd suggest you use <b>print_state()</b>.  My code
+does things like the following, to print out, for example, "Creator Thread Sleeping" when there is a 'C' in <b>verbosity</b>.
+
+<p><center><table border=3 cellpadding=3><td><pre>
+  if (strchr(G-&gt;verbosity, 'C') != NULL) {
+    print_state('C', "Creator Thread Sleeping");
+  }
+</pre></td></table></center><p>
+
+<p>
+<hr>
+<h3>Given that backdrop, what are you to do?</h3>
+
+You are to implement <b>initialize_v()</b>, <b>hydrogen()</b> and <b>oxygen()</b> so that they work within the
+above framework.   I'm going to give you an example which is in 
+<b><a href=bonding-example-1.c>bonding-example-1.c</a></b> -- the code is commented inline, so give it a read:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
+#include &lt;pthread.h&gt;
+#include "bonding.h"
+
+<font color=blue>/* This solution only works with one molecule. */</font>
+
+struct global_info {
+  pthread_mutex_t *lock;
+  int h1;
+  int h2;
+  int o;
+};
+
+<font color=blue>/* Initialize_v() sets h1/h2/o to -1 and initializes the lock. */</font>
+
+void *initialize_v(char *verbosity)
+{
+  struct global_info *g;
+
+  g = (struct global_info *) malloc(sizeof(struct global_info));
+  g-&gt;lock = new_mutex();
+  g-&gt;h1 = -1;
+  g-&gt;h2 = -1;
+  g-&gt;o = -1;
+  return (void *) g;
+}
+
+<font color=blue>/* The hydrogen thread tries to set h1 or h2 to itself.  If both
+   are already taken, then it simply returns NULL.  Otherwise,
+   it sleeps to make sure that the molecule is ready, and it
+   calls &lt;b&gt;Bond()&lt;/b&gt;.
+ */</font>
+
+void *hydrogen(void *arg)
+{
+  struct bonding_arg *a;
+  struct global_info *g;
+  char *rv;
+
+  a = (struct bonding_arg *) arg;
+  g = (struct global_info *) a-&gt;v;
+
+  pthread_mutex_lock(g-&gt;lock);
+  if (g-&gt;h1 == -1) {
+    g-&gt;h1 = a-&gt;id;
+  } else if (g-&gt;h2 == -1) {
+    g-&gt;h2 = a-&gt;id;
+  } else {
+    pthread_mutex_unlock(g-&gt;lock);
+    return NULL;
+  }
+
+  pthread_mutex_unlock(g-&gt;lock);
+
+  sleep(1);   <font color=blue>/* You aren't allowed to make this call.  I'm just doing this so that we can be
+                 sure that the molecule is ready. You will need to use wait()/signal() do 
+                 to this correctly. */</font>
+
+  rv = Bond(g-&gt;h1, g-&gt;h2, g-&gt;o);
+  return (void *) rv;
+}
+
+<font color=blue>/* Similarly, the oxygen thread tries to set g-&gt;o to itself.  It
+   g-&gt;o has already been set, then it returns NULL.  Otherwise, it
+   sleeps to give the hydrogen threads time to run, and then it
+   calls Bond() and returns the result. */</font>
+
+void *oxygen(void *arg)
+{
+  struct bonding_arg *a;
+  struct global_info *g;
+  char *rv;
+
+  a = (struct bonding_arg *) arg;
+  g = (struct global_info *) a-&gt;v;
+
+  pthread_mutex_lock(g-&gt;lock);
+  if (g-&gt;o == -1) {
+    g-&gt;o = a-&gt;id;
+  } else {
+    pthread_mutex_unlock(g-&gt;lock);
+    return NULL;
+  }
+
+  pthread_mutex_unlock(g-&gt;lock);
+
+  sleep(1);   <font color=blue>/* See the sleep() call above. */</font>
+
+  rv = Bond(g-&gt;h1, g-&gt;h2, g-&gt;o);
+  return (void *) rv;
+}
+</pre></td></table></center><p>
+
+Here's some more explanation -- the <b>(void *)</b> holds a pointer to a <b>struct global_info</b>.  This
+has a mutex and three integers: <b>h1</b>, <b>h2</b> and <b>o</b>.  These are initialized to -1.
+Our <b>hydrogen</b> threads try to set <b>h1</b> to be their id.  If <b>h1</b> is already set, then they
+try to set <b>h2</b>.  If both <b>h1</b> and <b>h2</b> are already set, then they simply return NULL.
+<p>
+Similarly, the oxygen threads try to set <b>o</b> to be their ids, returning NULL if <b>o</b> is already
+set.  The threads that have set the id's sleep for a second.  This is bad form, and not allowed in your
+lab, but I'm doing this so you can see a simple solution.  By the time that <b>sleep()</b> calls return,
+<b>h1</b>,
+<b>h2</b> and
+<b>o</b> should have been set.  Each of the three threads calls <b>Bond(g->h1, g->h2, g->o)</b>.  In other 
+words the three calls are identical.  All three return the return value of the <b>Bond()</b> call.  
+<p>
+Let's run this on a system with one molecule.  We'll set <b>verbosity</b> to "CJB" so that you can see the
+thread creation, thread joining and bonding calls:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-1 1 1 3 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    1 - OF:    0 - Created thread with tid 0x700000187000.  Number: 0.  Type: h
+C: TF:    2 - TJ:    0 - HF:    2 - OF:    0 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Created thread with tid 0x70000028d000.  Number: 2.  Type: o
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Creator thread is done.  Calling pthread_exit().
+<font color=blue>A second passes here.</font>
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 0 called Bond(0,1,2).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 2 called Bond(0,1,2).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 1 called Bond(0,1,2).
+J: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Joining with thread number 0.  Tid 0x700000187000 (Bond (0,1,2))
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Join complete and verified: thread number 0.  Bond (0,1,2).
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Joining with thread number 1.  Tid 0x70000020a000 (Bond (0,1,2))
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Join complete and verified: thread number 1.  Bond (0,1,2).
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Joining with thread number 2.  Tid 0x70000028d000 (Bond (0,1,2))
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - Join complete and verified: thread number 2.  Bond (0,1,2).
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - The joiner is done.  Calling pthread_exit().
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+As you can see, the creator thread created threads 0 and 1, which are hydrogen threads, and thread 2, which is an
+oxygen thread.  Thread 0 assigned <b>g->h1</b> to be 0, and 
+thread 1 assigned <b>g->h2</b> to be 1.  Thread 2 assigned <b>g->o</b> to be 2.  After all the threads wait for 
+a second, they all make their <b>Bond()</b> calls.  Then they all join.  The joiner thread verifies that the
+return values are all good, and the program exits.  
+<p>
+If we run it on a seed of 3 rather than 1, you'll see the thread 0 is the oxygen thread, and everything still
+works.
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-1 3 1 3 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    0 - OF:    1 - Created thread with tid 0x700000187000.  Number: 0.  Type: o
+C: TF:    2 - TJ:    0 - HF:    1 - OF:    1 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Created thread with tid 0x70000028d000.  Number: 2.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Creator thread is done.  Calling pthread_exit().
+<font color=blue>A second passes here.</font>
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 1 called Bond(1,2,0).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 0 called Bond(1,2,0).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 2 called Bond(1,2,0).
+J: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Joining with thread number 1.  Tid 0x70000020a000 (Bond (1,2,0))
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Join complete and verified: thread number 1.  Bond (1,2,0).
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Joining with thread number 2.  Tid 0x70000028d000 (Bond (1,2,0))
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Join complete and verified: thread number 2.  Bond (1,2,0).
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Joining with thread number 0.  Tid 0x700000187000 (Bond (1,2,0))
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - Join complete and verified: thread number 0.  Bond (1,2,0).
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - The joiner is done.  Calling pthread_exit().
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+If we run it on two molecules, the program hangs, because threads 1, 4 and 5 all return NULL, without having
+called <b>Bond()</b>:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-1 3 2 6 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    0 - OF:    1 - Created thread with tid 0x700000187000.  Number: 0.  Type: o
+C: TF:    2 - TJ:    0 - HF:    0 - OF:    2 - Created thread with tid 0x70000020a000.  Number: 1.  Type: o
+C: TF:    3 - TJ:    0 - HF:    1 - OF:    2 - Created thread with tid 0x70000028d000.  Number: 2.  Type: h
+C: TF:    4 - TJ:    0 - HF:    2 - OF:    2 - Created thread with tid 0x700000310000.  Number: 3.  Type: h
+C: TF:    5 - TJ:    0 - HF:    3 - OF:    2 - Created thread with tid 0x700000393000.  Number: 4.  Type: h
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Created thread with tid 0x700000416000.  Number: 5.  Type: h
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Creator thread is done.  Calling pthread_exit().
+<font color=blue>A second passes here.</font>
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 2 called Bond(2,3,0).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 3 called Bond(2,3,0).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 0 called Bond(2,3,0).
+J: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Joining with thread number 2.  Tid 0x70000028d000 (Bond (2,3,0))
+J: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Join complete and verified: thread number 2.  Bond (2,3,0).
+J: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Joining with thread number 3.  Tid 0x700000310000 (Bond (2,3,0))
+J: TF:    6 - TJ:    2 - HF:    4 - OF:    2 - Join complete and verified: thread number 3.  Bond (2,3,0).
+J: TF:    6 - TJ:    2 - HF:    4 - OF:    2 - Joining with thread number 0.  Tid 0x700000187000 (Bond (2,3,0))
+J: TF:    6 - TJ:    3 - HF:    4 - OF:    2 - Join complete and verified: thread number 0.  Bond (2,3,0).
+<font color=blue>The program hangs.</font>
+</pre>
+
+Take a look at another solution, in 
+<b><a href=bonding-example-2.c>bonding-example-2.c</a></b>:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+<font color=blue>/* This solution only works with one molecule, 
+   and if threads 0 and 1 are hydrogen,
+   while thread 2 is oxygen. */</font>
+
+void *initialize_v(char *verbosity)
+{
+  return NULL;
+}
+
+void *hydrogen(void *arg)
+{
+  return Bond(0, 1, 2);
+}
+
+void *oxygen(void *arg)
+{
+  return Bond(0, 1, 2);
+}
+</pre></td></table></center><p>
+
+This one has all threads call <b>Bond(0, 1, 2)</b>.   When we call it with a seed of 1 on one molecule, it works by complete
+happenstance, because threads 0 and 1 are hydrogens, and thread 2 is oxygen:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-2 1 1 3 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    1 - OF:    0 - Created thread with tid 0x700000187000.  Number: 0.  Type: h
+C: TF:    2 - TJ:    0 - HF:    2 - OF:    0 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Created thread with tid 0x70000028d000.  Number: 2.  Type: o
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Creator thread is done.  Calling pthread_exit().
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 0 called Bond(0,1,2).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 1 called Bond(0,1,2).
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 2 called Bond(0,1,2).
+J: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Joining with thread number 0.  Tid 0x700000187000 (Bond (0,1,2))
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Join complete and verified: thread number 0.  Bond (0,1,2).
+J: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Joining with thread number 1.  Tid 0x70000020a000 (Bond (0,1,2))
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Join complete and verified: thread number 1.  Bond (0,1,2).
+J: TF:    3 - TJ:    2 - HF:    2 - OF:    1 - Joining with thread number 2.  Tid 0x70000028d000 (Bond (0,1,2))
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - Join complete and verified: thread number 2.  Bond (0,1,2).
+J: TF:    3 - TJ:    3 - HF:    2 - OF:    1 - The joiner is done.  Calling pthread_exit().
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+However, if you call it with a seed of 3, it fails, because thread 0 is oxygen, and the <b>Bond()</b>
+call is saying it's hydrogen:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-2 3 1 3 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    0 - OF:    1 - Created thread with tid 0x700000187000.  Number: 0.  Type: o
+C: TF:    2 - TJ:    0 - HF:    1 - OF:    1 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Created thread with tid 0x70000028d000.  Number: 2.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Creator thread is done.  Calling pthread_exit().
+Error -- thread with id 0 called Bond(0,1,2).  It is of the wrong type for this bond.
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+If we call it with a seed of 1 and two molecules, you'll see that threads 0, 1 and 2 are all hydrogen,
+so the <b>Bond()</b> call fails again:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-2 1 2 6 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    1 - OF:    0 - Created thread with tid 0x700000187000.  Number: 0.  Type: h
+C: TF:    2 - TJ:    0 - HF:    2 - OF:    0 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    3 - OF:    0 - Created thread with tid 0x70000028d000.  Number: 2.  Type: h
+C: TF:    4 - TJ:    0 - HF:    4 - OF:    0 - Created thread with tid 0x700000310000.  Number: 3.  Type: h
+C: TF:    5 - TJ:    0 - HF:    4 - OF:    1 - Created thread with tid 0x700000393000.  Number: 4.  Type: o
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Created thread with tid 0x700000416000.  Number: 5.  Type: o
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Creator thread is done.  Calling pthread_exit().
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 0 called Bond(0,1,2).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 1 called Bond(0,1,2).
+Error -- thread with id 2 called Bond(0,1,2).  It is of the wrong type for this bond.
+UNIX> <font color=darkred><b></b></font>
+
+</pre>
+
+If you call it with a seed of 2 and two molecules, then threads 0, 1 and 2 happen to work, but when thread
+3 calls <b>Bond()</b>, it fails because thread three is not one of the atoms in the <b>Bond()</b> call.
+
+<pre>
+UNIX> <font color=darkred><b>bonding-example-2 2 2 6 CJB</b></font>
+C: TF:    1 - TJ:    0 - HF:    1 - OF:    0 - Created thread with tid 0x700000187000.  Number: 0.  Type: h
+C: TF:    2 - TJ:    0 - HF:    2 - OF:    0 - Created thread with tid 0x70000020a000.  Number: 1.  Type: h
+C: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Created thread with tid 0x70000028d000.  Number: 2.  Type: o
+C: TF:    4 - TJ:    0 - HF:    3 - OF:    1 - Created thread with tid 0x700000310000.  Number: 3.  Type: h
+C: TF:    5 - TJ:    0 - HF:    4 - OF:    1 - Created thread with tid 0x700000393000.  Number: 4.  Type: h
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Created thread with tid 0x700000416000.  Number: 5.  Type: o
+C: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Creator thread is done.  Calling pthread_exit().
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 0 called Bond(0,1,2).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 1 called Bond(0,1,2).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 2 called Bond(0,1,2).
+Error -- thread with id 3 called Bond(0,1,2).  The id has to be one of the atoms.
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+So, the bottom line here is that the driver tries to double-check you as much as possible.  Your goal is to 
+have the program run to completion without any errors.
+
+<hr>
+<h3>Restrictions</h3>
+
+The TA's will check for these by hand, and you won't get credit if you do any of these, so pay attention to them,
+and don't do them:
+
+<UL>
+<LI> No <b>sleep()</b> calls, or the equivalent (e.g. <b>usleep()</b>, <b>select()</b> with a timeout).
+<LI> No busy waiting -- i.e. no <b>while()</b> loops that continuously test a condition in hopes that another
+thread will change it, without doing the problem <b>wait()</b> calls on a condition variable.  
+If you're in doubt -- ask a TA.
+<LI> No <b>pthread_yield()</b> calls.
+<LI> When a thread calls <b>Bond()</b> it is <i>not</i> allowed to hold any locked mutexes.  
+<LI> I'd prefer that you free memory and destroy condition variables when your <b>hydrogen</b> 
+and 
+<b>oxygen</b> threads die.  The TA's will deduct 5 points if you don't do this, and you'll lose
+more points if you run out of memory.
+</UL>
+
+<hr>
+<h3>Strategy</h3>
+
+There are many ways to do this assignment.  Here are two ways that I implemented.  The first is 
+simpler than the second, but both are reasonable solutions.  You may want to try your own solution.
+You should not try to solve this with just two condition variables -- that will be a very bug-prone
+approach, and may not work at all.
+
+<b>Solution #1: A list for waiting hydrogens and a list for waiting oxygens.</b>  Your global data
+structure will have a mutex and two dllists.  One for waiting hydrogens and one for waiting oxygens.
+Each thread has its own data structure too, which contains a condition variable, the thread's id,
+and id's of the three threads that will compose its molecule.  (One of those three id's will be the
+thread's id, of course).
+<p>
+When a thread begins, it creates its data structure and locks the global mutex.  It then looks at
+the waiting lists to see if it can create a molecule with itself and two of the waiting threads.
+If it cannot, then it adds itself to the appropriate list and blocks.  
+<p>
+If it can create a molecule, then it sets the three thread id's for all three threads (itself and
+the two threads that are blocking), removes the two threads from their lists, and calls <b>pthread_cond_signal()</b> on them.  And then it unlocks the mutex.  The other two threads will return from their
+<b>pthread_cond_wait()</b> calls at some point, and then they will unlock the mutex.  
+<p>
+At this point in a thread's execution, it has unlocked the mutex, and its three id's have been set,
+so it calls <b>Bond()</b> on the three ids and stores the return value.  It then destroys its condition
+variable, frees up memory, and returns the return value.
+<p>
+I have an executable that works in this way in <b>bonding_list</b>.  It supports the following verbosities:
+<UL>
+<LI> 'H' means that the hydrogen threads will print their states.
+<LI> 'O' means that the oxygen threads will print their states.
+<LI> 'G' means that periodically, the state of the system (the two lists) is printed.
+</UL>
+
+Here's a run with seed=1 and two molecules.  There's a lot of text here, but you can see how the
+threads hook up, and how the waiting hydrogen thread list grows and shrinks:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-list 1 2 6 HOGB</b></font>
+H: TF:    2 - TJ:    0 - HF:    3 - OF:    0 - Hydrogen thread 0 started & trying to lock mutex.
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 - Printing the state of the lists.
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 -   Waiting H list is empty.
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 -   Waiting O list is empty.
+H: TF:    4 - TJ:    0 - HF:    4 - OF:    1 - Hydrogen thread 0 calling pthread_cond_wait()
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 - Printing the state of the lists.
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 -   Waiting H  0: 0.
+G: TF:    4 - TJ:    0 - HF:    4 - OF:    1 -   Waiting O list is empty.
+H: TF:    4 - TJ:    0 - HF:    4 - OF:    1 - Hydrogen thread 2 started & trying to lock mutex.
+H: TF:    4 - TJ:    0 - HF:    4 - OF:    1 - Hydrogen thread 1 started & trying to lock mutex.
+H: TF:    5 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 3 started & trying to lock mutex.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen thread 4 started & trying to lock mutex.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen thread 5 started & trying to lock mutex.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 2 calling pthread_cond_wait()
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 1 calling pthread_cond_wait()
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  2: 1.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  2: 1.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 3 calling pthread_cond_wait()
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  2: 1.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  3: 3.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 0.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 2.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  2: 1.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  3: 3.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Creating bond with h1=0, h2=2 and o=myself=4
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen thread 4 calling bond(0,2,4)
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 4 called Bond(0,2,4).
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the state of the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  0: 1.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting H  1: 3.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   Waiting O list is empty.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Creating bond with h1=1, h2=3 and o=myself=5
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen thread 5 calling bond(1,3,5)
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 5 called Bond(1,3,5).
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 2 calling bond(0,2,4)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 0 calling bond(0,2,4)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 3 calling bond(1,3,5)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen thread 1 calling bond(1,3,5)
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 2 called Bond(0,2,4).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 0 called Bond(0,2,4).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 3 called Bond(1,3,5).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 1 called Bond(1,3,5).
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+This run shows what happens when an oxygen thread is created first:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-list 3 1 3 HOGB</b></font>
+O: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Oxygen thread 0 started & trying to lock mutex.
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Hydrogen thread 1 started & trying to lock mutex.
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Hydrogen thread 2 started & trying to lock mutex.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Printing the state of the lists.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting H list is empty.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting O list is empty.
+O: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Oxygen thread 0 calling pthread_cond_wait()
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Printing the state of the lists.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting H list is empty.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting O  0: 0.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Printing the state of the lists.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting H list is empty.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting O  0: 0.
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Hydrogen thread 1 calling pthread_cond_wait()
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Printing the state of the lists.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting H  0: 1.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting O  0: 0.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Printing the state of the lists.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting H  0: 1.
+G: TF:    3 - TJ:    0 - HF:    2 - OF:    1 -   Waiting O  0: 0.
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Creating bond with h1=myself=2, h2=1 and o=0
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Hydrogen thread 2 calling bond(2,1,0)
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 2 called Bond(2,1,0).
+H: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Hydrogen thread 1 calling bond(2,1,0)
+O: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Oxygen thread 0 calling bond(2,1,0)
+B: TF:    3 - TJ:    0 - HF:    2 - OF:    1 - Thread 1 called Bond(2,1,0).
+B: TF:    3 - TJ:    1 - HF:    2 - OF:    1 - Thread 0 called Bond(2,1,0).
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+<b>Solution #2: Lists for incomplete molecules.</b>  In my second solution, I did not create 
+data structures for each thread.  Instead, I created a data structure for each molecule.  This
+data structure had the following fields:
+
+<UL>
+<LI> The id's of hydrogen atom 1, hydrogen atom 2, and the oxygen atom.
+<LI> Condition variables for hydrogen atom 1, hydrogen atom 2, and the oxygen atom.
+<LI> A counter to record when to free the data structure.
+</UL>
+
+I also had three Dllists to hold incomplete molecules:
+
+<UL>
+<LI> <b>Needs_hydrogen</b> for molecules that are only missing hydrogen atoms.
+<LI> <b>Needs_oxygen</b> for molecules that are only missing their oxygen atoms.
+<LI> <b>Needs_oh</b> for molecules that are missing one hydrogen and one oxygen atom.
+</UL>
+
+Now, when a hydrogen thread gets the mutex, it checks <b>needs_hydrogen</b> to see if there
+are any incomplete molecules that need hydrogen.  If there is one, then it removes it from
+the list.  
+<p>
+If <b>needs_hydrogen</b> is empty, then it checks <b>needs_oh</b>, and if there is a molecule
+there, it removes it from the list.
+<p>
+If both of those lists are empty, then it creates a new molecule.
+<p>
+Now, it adds itself to the molecule, and if the molecule is still incomplete, it adds the molecule
+to the proper list and blocks.  If the molecule is complete, then it signals the two threads that
+are blocking, and they all call <b>Bond()</b>.  The last of these frees the molecule and destroys
+its condition variables (this is why we have the counter).  
+<p>
+Obviously, the oxygen threads work similarly, checking <b>needs_oxyben</b> and <b>needs_oh</b>.
+If both of these are empty, then it creates a new molecule.
+<p>
+As with the first solution, I have put in code to print the hydrogen and oxygen threads as they
+go through their various states, and global information to print out the states of the Dllists:
+
+<pre>
+UNIX> <font color=darkred><b>bonding-molecule 1 2 6 HOGB</b></font>
+H: TF:    2 - TJ:    0 - HF:    2 - OF:    0 - New hydrogen thread 0 has locked the mutex.
+G: TF:    5 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    5 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 0 creating a new molecule.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 0.  Appending molecule to needs_oh and blocking.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh 0: (0,-1,-1)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - New hydrogen thread 1 has locked the mutex.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh 0: (0,-1,-1)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 1 grabbing molecule from 'needs_oh'. H1=0
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 1.  Appending molecule to needs_oxygen and blocking.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - New hydrogen thread 2 has locked the mutex.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 2 creating a new molecule.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 2.  Appending molecule to needs_oh and blocking.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh 0: (2,-1,-1)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - New hydrogen thread 3 has locked the mutex.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh 0: (2,-1,-1)
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 3 grabbing molecule from 'needs_oh'. H1=2
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 3.  Appending molecule to needs_oxygen and blocking.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 1: (2,3,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - New oxygen thread 4 has locked the mutex.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (0,1,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 1: (2,3,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen 4 grabbing molecule from 'needs_oxygen'. H1=0.  H2=1.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen 4.  Molecule complete - calling pthread_cond_signal() on the others.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - New oxygen thread 5 has locked the mutex.
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 4 called Bond(0,1,4).
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Printing the lists.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_hydrogen is empty.
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oxygen 0: (2,3,-1)
+G: TF:    6 - TJ:    0 - HF:    4 - OF:    2 -   needs_oh is empty.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen 5 grabbing molecule from 'needs_oxygen'. H1=2.  H2=3.
+O: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Oxygen 5.  Molecule complete - calling pthread_cond_signal() on the others.
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 5 called Bond(2,3,5).
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 0 is unblocked.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 1 is unblocked.
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 1 is freeing its molecule and destroying condition variables
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 0 called Bond(0,1,4).
+B: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Thread 1 called Bond(0,1,4).
+H: TF:    6 - TJ:    0 - HF:    4 - OF:    2 - Hydrogen 2 is unblocked.
+H: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Hydrogen 3 is unblocked.
+H: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Hydrogen 3 is freeing its molecule and destroying condition variables
+B: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Thread 2 called Bond(2,3,5).
+B: TF:    6 - TJ:    1 - HF:    4 - OF:    2 - Thread 3 called Bond(2,3,5).
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Two notes here, in case you're paying attention to that output:
+
+<OL>
+<LI> I actually free the molecule before calling <b>Bond()</b>, copying the ids of h1, h2 and o to local variables
+before the <b>free()</b> call.  That way, I can hold the mutex when I call <b>free()</b>.  (This is because
+you're not allowed to hold the mutex when you call <b>Bond()</b>.
+<LI> When I need two hydrogen atoms, I append the molecule to <b>needs_hydrogen</b>, and when I need one, I
+prepend it.  That way, I prefer molecules that are closer to being completed.
+</OL>
+
+<hr>
+<h3>Grading</h3>
+
+I have provided a gradescript.  The TA's are going to grade this as follows:
+
+<UL>
+<LI> They will compile your <b>bonding.c</b> file with my <b>bonding.h</b> 
+and <b>bonding-driver.c</b> (and of course <b>libfdr.a</b>).  
+<LI> They will run a couple of sample runs with verbosity equal to "CJB" to verify that
+your program is running nicely within the structure of my code.
+<LI> Then they will run the <b>gradeall</b>.  If your program hangs, that will be a 
+failure.  Cases 76-100 are slower (since they fork off > 20,000 threads).
+</UL>
