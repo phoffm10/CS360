@@ -1,0 +1,465 @@
+<TITLE>CS360 Lab A</title>
+
+<body bgcolor=FFFFFF>
+
+<h1>CS360 Lab #A -- <b>Threaded Chat Server</b></h1>
+
+<UL>
+<LI> <a href=http://web.eecs.utk.edu/~jplank>James S. Plank</a>
+<LI> <a href=http://web.eecs.utk.edu/~jplank/jplank/classes/cs360/>CS360</a>
+<LI> Url: <a href=http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/labs/Lab-9-Chat/index.html>
+                  http://web.eecs.utk.edu/~jplank/plank/classes/cs360/360/labs/Lab-9-Chat/index.html</a>
+<LI> Directory: <b>/home/jplank/cs360/labs/Lab-9-Chat</b>
+</UL>
+
+<p>
+
+This lab is a very powerful one -- you are going to write a chat server using pthreads
+that allows clients to chat with each other using <b>nc</b> (or <b>jtelnet</b>).
+The syntax of your server is:
+
+<pre>
+UNIX> <font color=darkred><b>./chat-server port Chat-Room-Names ...</b></font>
+</pre>
+
+So, for example, if you'd like to serve chat rooms for football, bridge and politics on 
+<b>hydra3</b> port 8005, you would do:
+
+<pre>
+UNIX> <font color=darkred><b>./chat_server hydra3.eecs.utk.edu 8005 Football Bridge Politics</b></font>
+</pre>
+
+Clients attach to the server through <b>nc</b>.  Suppose, for example, we have a clients
+on <b>hydra2</b> and <b>hydra4</b>:
+
+
+<p><center><table border=3 cellpadding=3><td valign=top>
+On <b>hydra2</b>:
+<hr>
+<pre>
+UNIX> <font color=darkred><b>nc hydra3.eecs.utk.edu 8005</b></font>
+Chat Rooms:
+
+Bridge:
+Football:
+Politics:
+
+Enter your chat name (no spaces):
+<font color=darkred><b>Dr-Plank</b></font>
+Enter chat room:
+<font color=darkred><b>Bridge</b></font>
+Dr-Plank has joined
+<font color=darkred><b>There's no one here...</b></font>
+Dr-Plank: There's no one here...
+
+
+
+
+
+
+
+
+
+
+
+Goofus has joined
+<font color=darkred><b>Hi Goofus -- do you like bridge?</b></font>
+Dr-Plank: Hi Goofus -- do you like bridge?
+
+Goofus: Bridge? You mean that card game my gramma plays?
+<font color=darkred><b>Indeed</b></font>
+Dr-Plank: Indeed
+
+Goofus: Loser.  Bye.
+
+Goofus has left
+<font color=darkred><b>Can't say I liked him.</b></font>
+Dr-Plank: Can't say I liked him.
+
+
+
+
+
+
+
+
+
+
+Gallant has joined
+
+Gallant: Hi Dr. P
+<font color=darkred><b>Greetings, Gallant</b></font>
+Dr-Plank: Greetings, Gallant
+
+Gallant: After memorizing your lecture notes,
+
+Gallant: I like to read books on bridge.
+<font color=darkred><b>I will recommend you for many jobs & scholarships.</b></font>
+Dr-Plank: I will recommend you for many jobs & scholarships.
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX> <font color=darkred><b></b></font>
+</pre>
+</td><td valign=top>
+On <b>hydra4</b>:
+<hr>
+<pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+UNIX> <font color=darkred><b>nc hydra3.eecs.utk.edu 8005</b></font>
+Chat Rooms:
+
+Bridge: Dr-Plank
+Football:
+Politics:
+
+Enter your chat name (no spaces):
+<font color=darkred><b>Goofus</b></font>
+Enter chat room:
+<font color=darkred><b>Bridge</b></font>
+Goofus has joined
+
+Dr-Plank: Hi Goofus -- do you like bridge?
+<font color=darkred><b>Bridge? You mean that card game my gramma plays?</b></font>
+Goofus: Bridge? You mean that card game my gramma plays?
+
+Dr-Plank: Indeed
+<font color=darkred><b>Loser.  Bye.</b></font>
+Goofus: Loser.  Bye.
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX> <font color=darkred><b></b></font>
+
+UNIX> <font color=darkred><b>nc  hydra3.eecs.utk.edu 8005</b></font>
+Chat Rooms:
+
+Bridge: Dr-Plank
+Football:
+Politics:
+
+Enter your chat name (no spaces):
+<font color=darkred><b>Gallant</b></font>
+Enter chat room:
+<font color=darkred><b>Bridge</b></font>
+Gallant has joined
+<font color=darkred><b>Hi Dr. P</b></font>
+Gallant: Hi Dr. P
+
+Dr-Plank: Greetings, Gallant
+<font color=darkred><b>After memorizing your lecture notes,</b></font>
+Gallant: After memorizing your lecture notes,
+<font color=darkred><b>I like to read books on bridge.</b></font>
+Gallant: I like to read books on bridge.
+
+Dr-Plank: I will recommend you for many jobs & scholarships.
+
+Dr-Plank has left
+<font color=darkred><b>I didn't get a chance to be more sycophantic!</b></font>
+Gallant: I didn't get a chance to be more sycophantic!
+<font color=darkred><b>&lt;CNTL-D&gt;</b></font>
+UNIX>
+</pre>
+</td></table></center><p>
+
+To be descriptive, when a client joins, the server sends it information about the current
+chat rooms.  The chat room names will be listed lexicographically, and the name of each
+person chatting should be listed with each chat room, separated by a space.  
+The order of that listing should be the order in which the chatters joined.  
+<p>
+The server then prompts the client for a name and then a chat room.  Obviously 
+it should error check (including premature EOF).  Once the person joins the chat room,
+a line is sent to all others in the chat room that the person has joined.  Lines entered
+by the clients are sent to all the clients in the chat room.
+<p>
+The server should support <i>any</i> number of clients, and should work seamlessly when 
+clients leave, as Goofus, and later Dr-Plank did above.  The server does not have to 
+print any output, but it may -- I will not be testing what the server prints --
+I will only test the behavior of the clients.
+<p>
+<hr>
+<h2>Structure</h2>
+
+This lab is involved, and will use pthreads, mutexes and condition variables.  Suppose
+there are <i>r</i> chat rooms and <i>c</i> clients.  Then your <b>chat_server</b> will 
+have <i>r+c+1</i> threads.  Specifically:
+
+<p>
+<UL>
+<LI> There will be one thread that is spinning on a <b>while()</b> loop, waiting for clients
+to attach to the socket.  When it detects a client, it will create a client thread.
+<p>
+<LI> There will be one thread for each chat room.  That thread will typically be blocked
+on a condition variable (unique to that chat room).  When the condition variable is 
+unblocked, that is the indication that the server has received input from a client.  That
+input will be on a list. For each string on the list, the server thread should traverse all
+the clients and send the string to each client.  When it is done processing the list, it
+should wait on the condition variable again.
+<p>
+<LI> There will be one thread for each client.  That thread will typically be blocked 
+reading from the socket.  When it receives a line of text from the socket, it will construct
+the proper string from it, put that string onto the chat room's list, and signal the chat room server.
+</UL>
+
+Remember to protect data structures when you have to.  For example, the clients and servers share
+the chat room's lists.  When the clients update the list and when the servers read the list and
+delete entries, those operations must be protected by a mutex.
+<p>
+
+You should use <b>fdopen()</b> twice on each connection.  The client threads will call <b>fgets()</b>
+and <b>fputs()</b> on these stdio buffers initially until the client's name/chat-room have been
+obtained.  After that, the client threads only call <b>fgets()</b> and the chat room threads
+call <b>fputs()</b> (and <b>fflush()</b>).
+<p>
+A subtle part of this lab is to deal with clients exiting <i>at any point</i>.  That means you
+have to test the return values of all <b>fputs()</b>, <b>fgets()</b> and <b>fflush()</b> calls
+and deal with them appropriately.  I dealt with them as follows:
+<p>
+<UL>
+<LI> If I catch an EOF while reading the client's info, I simply close the buffers and kill
+the client thread.
+<LI> After the client has joined the chat room, then if I detect EOF on a <b>fgets()</b> call,
+then I close the input buffer.  If the output buffer is still open and if the chat room thread
+is not currently trying to write to it, then I close the output buffer and remove the client
+from the chat room's list.  Then I kill the client thread.
+<LI> If the chat room thread detects a problem on <b>fputs()</b> or <b>fflush()</b>, then
+I remove the client from the chat room's list and close the output buffer.  I don't mess with
+the client thread, since it should detect EOF on the <b>fgets()</b> call and exit on its own.
+</UL>
+<p>
+You may want to draw yourself some pictures to help visualize the interactions between 
+the client threads and the chat room threads.
+
+<hr>
+<h2>Chatty_chat_server</h2>
+
+In the lab directory, there is an executable called <b>chatty_chat_server</b>.  It is identical
+to <b>chat_server</b>, except it prints out thread creating and exiting, plus mutex and cv 
+actions.  It gives a little more information as well.
+You may find it helpful to see how it works when you implement your own synchronization.
+
+<hr>
+<h2>The Gradescript</h2>
+
+The gradescript here is different.  It assumes that you are running your <b>chat_server</b> 
+on another machine.  You should run the chat server as follows:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+chat_server <i>port</i> Bridge Baseball Politics Video-Games Art Music Movies Food Woodworking American-Idol
+</pre></td></table></center><p>
+
+Make sure to use a port number that is greater than or equal to 8000.  
+And please make sure that the client and server are both on our lab machines (hydra, tesla).
+<p>
+You run the gradescript with three arguments:
+
+<p><center><table border=3 cellpadding=3><td><pre>
+gradescript <i>number</i> <i>host</i> <i>port</i>
+</pre></td></table></center><p>
+
+The host and port are of your <b>chat_server</b>.  Gradescript will run the program <b>laba-tester</b>, 
+which opens a number of client connections, sends lines and tests the output.  Since your server
+should be able to handle clients coming and going, you shouldn't have to start and stop your client
+between runs of <b>gradescript</b> -- just start it once and that should suffice for all <b>gradescript</b>
+runs.
+<p>
+
+Now, a little detail on the internals.  <b>Gradescript</b> runs a program called <b>laba-tester</b>, which should
+be called with the same arguments as <b>gradescript</b>.  You should use <b>laba-tester</b> to help develop your
+server.  Let's take an easy example.  My server is running on <b>hydra3</b>, port 8008:
+
+<pre>
+UNIX> <font color=darkred><b>./laba-tester 1 hydra3.eecs.utk.edu 8008</b></font>
+Event in Chat Room Art: Fiona has joined
+Read Event From Client Fiona: Fiona has joined
+Event in Chat Room Art: Mercutio has joined
+Read Event From Client Fiona: Mercutio has joined
+Read Event From Client Mercutio: Mercutio has joined
+Event in Chat Room Art: Fiona has left
+Read Event From Client Mercutio: Fiona has left
+Event in Chat Room Art: Mercutio has left
+Events correctly processed
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+There are three kinds of events that <b>laba-tester</b> will generate:
+<UL>
+<LI> Client joins a room.
+<LI> Client leaves a room.
+<LI> Client writes a string.
+</UL>
+
+When a client <i>c</i> joins a room <i>r</i>, you see the string "Event in Chat Room <i>r</i>: <i>c</i> has joined".
+Each client <i>c2</i> attached to that room should receive a string saying the client has joined.  
+<b>laba-tester</b> tests each of these, and prints out the string "Read Event From Client <i>c2</i>: <i>c</i> has joined".
+<p>
+The printout when clients leave is similar -- when they leave, you get
+"Event in Chat Room <i>r</i>: <i>c</i> has left", and then each client still attached to that
+room should get "Read Event From Client <i>c2</i>: <i>c</i> has left".
+<p>
+As you can see, in the above example, clients Fiona and Mercutio join the chat room "Art."  Then 
+Fiona leaves, and then Mercutio leaves.  Test cases 1-5 just test entering and leaving.
+<p>
+Let's look at a more complicated one:
+
+<pre>
+UNIX> <font color=darkred><b>./laba-tester 7 hydra3.eecs.utk.edu 8008</b></font>
+Event in Chat Room American-Idol: Waluigi has joined
+Read Event From Client Waluigi: Waluigi has joined
+Event in Chat Room American-Idol: Tito has joined
+Read Event From Client Waluigi: Tito has joined
+Read Event From Client Tito: Tito has joined
+Write Event in Chat Room American-Idol: Waluigi: Papa's on the corner waitin' for the bus
+Read Event Client Tito, line: Waluigi: Papa's on the corner waitin' for the bus
+Read Event Client Waluigi, line: Waluigi: Papa's on the corner waitin' for the bus
+Event in Chat Room American-Idol: Waluigi has left
+Read Event From Client Tito: Waluigi has left
+Event in Chat Room American-Idol: Tito has left
+Events correctly processed
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+Again we have two clients, Waluigi and Tito, and we are using one chat room: "American-Idol."  After the
+two clients join, Waluigi writes "Papa's on the corner waitin' for the bus".  Both clients read the line
+successfully, and then they exit.  
+<p>
+If you want to see the order of events, look at <b>tmp-inputfile.txt</b>:
+
+<pre>
+UNIX> <font color=darkred><b>cat tmp-inputfile.txt </b></font>
+START Waluigi American-Idol
+START Tito American-Idol
+Waluigi: Papa's on the corner waitin' for the bus
+END Waluigi
+END Tito
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+And if you want to see the output of each client as it came from the server, look in <b>output-<i>client</i>.txt</b>:
+
+<pre>
+UNIX> <font color=darkred><b>cat output-Waluigi.txt </b></font>
+Chat Rooms:
+
+American-Idol:
+Art:
+Baseball:
+Bridge:
+Food:
+Movies:
+Music:
+Politics:
+Video-Games:
+Woodworking:
+
+Enter your chat name (no spaces):
+Enter chat room:
+Waluigi has joined
+Tito has joined
+Waluigi: Papa's on the corner waitin' for the bus
+UNIX> <font color=darkred><b>cat output-Tito.txt </b></font>
+Chat Rooms:
+
+American-Idol: Waluigi
+Art:
+Baseball:
+Bridge:
+Food:
+Movies:
+Music:
+Politics:
+Video-Games:
+Woodworking:
+
+Enter your chat name (no spaces):
+Enter chat room:
+Tito has joined
+Waluigi: Papa's on the corner waitin' for the bus
+Waluigi has left
+UNIX> <font color=darkred><b></b></font>
+</pre>
+
+The test cases are as follows:
+
+<UL>
+<LI> 1-5: 2 to 10 clients joining and exiting.
+<LI> 6-10: 2 clients, one room, one line of text.
+<LI> 11-15: 3 to 12 clients, one room, one line of text.
+<LI> 16-20: 2 to 12 clients, one room, two lines of text.
+<LI> 21-25: 3 to 12 clients, two rooms, two lines of text.
+<LI> 26-30: 3 to 12 clients, one room, one line of text per client.
+<LI> 31-35: 3 to 12 clients, two rooms, one line of text per client.
+<LI> 36-40: 3 to 12 clients, three rooms, one line of text per client.
+<LI> 41-100: 4 to 24 clients, four to ten rooms, 30 to 259 lines of text.
+</UL>
+
+If you call <b>laba-tester</b> with a number greater than 100, it will choose a random test
+case with the same distribution as above.
+<p>
+Finally, when you get to the later test cases, you will see some complex behavior.  When the tester
+writes lines of text to the server, it does not read them from the clients until one of the following:
+<UL>
+<LI> A joining event occurs.
+<LI> A leaving event occurs.
+<LI> More than 10 consecutive talking events have occurred.
+</UL>
+At that point, it reads from all the clients, and double-checks the correctness and ordering
+of the output.  It is entirely possible for the output order to differ from the input order, 
+because the order is going to depend on which threads return from their <b>fgets()</b> calls
+in your server.  Let's look at an example:
+
+<pre>
+UNIX> <font color=darkred><b>laba-tester 26 hydra3.eecs.utk.edu 8008</b></font>
+Event in Chat Room Video-Games: Tito has joined
+Read Event From Client Tito: Tito has joined
+Write Event in Chat Room Video-Games: Tito: Ah, sloppy Sue and Big Bones Billie, they'll be comin' up for air
+Read Event Client Tito, line: Tito: Ah, sloppy Sue and Big Bones Billie, they'll be comin' up for air
+Event in Chat Room Video-Games: Tinky-Winky has joined
+Read Event From Client Tito: Tinky-Winky has joined
+Read Event From Client Tinky-Winky: Tinky-Winky has joined
+Event in Chat Room Video-Games: Thor has joined
+Read Event From Client Tito: Thor has joined
+Read Event From Client Tinky-Winky: Thor has joined
+Read Event From Client Thor: Thor has joined
+Write Event in Chat Room Video-Games: Tinky-Winky: There's no escape, I can't wait
+Write Event in Chat Room Video-Games: Thor: To do what was right
+Read Event Client Thor, line: Thor: To do what was right
+Read Event Client Thor, line: Tinky-Winky: There's no escape, I can't wait
+Read Event Client Tinky-Winky, line: Thor: To do what was right
+Read Event Client Tinky-Winky, line: Tinky-Winky: There's no escape, I can't wait
+Read Event Client Tito, line: Thor: To do what was right
+Read Event Client Tito, line: Tinky-Winky: There's no escape, I can't wait
+...
+</pre>
+
+Note the order of the writing events: Tinky-Winky writes "There's no escape, I can't wait", and
+then Thor writes "To do what was right".  However, the talk-server's thread for Thor got its line
+before the thread for Tinky-Winky, and so each of the three clients reads Thor's line before
+Tinky-Winky's.  That is fine, and your output does not have to match mine exactly, since mine
+may differ from run to run.  However, each reading client has to receive the events in the 
+same order relative to each other.  The testing program tests to make sure this happens, so 
+it will approve the output above.  If, for example, Tito had printed out Tinky-Winky's line
+first while the other two printed out Thor's line first, the testing program would flag it as
+an error.
+
+<hr>
+<h3>A final word about gradeall</h3>
+
+The <b>gradeall</b> script runs all 100 <b>gradescript</b> tests, all with the same
+server.  So, if your server has a massive memory leak (made, for example, because you 
+don't clean up your threads when they die), then it may start to fail on the
+later gradescripts.  This may confuse you:  If you run gradescript 72 with a fresh 
+version of the server, it works fine; however, when you run <b>gradeall</b>, it fails
+on gradescript 72.  The reason is that your server has been leaking memory by not 
+cleaning up its threads, and eventually <b>pthread_create()</b> starts failing, or
+maybe even <b>malloc()</b> starts failing.  Pay attention to this -- make sure you
+test the return values of your calls so that you can figure out failures when they happen.
