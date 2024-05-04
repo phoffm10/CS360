@@ -1,5 +1,5 @@
 CC = gcc 
-INCLUDES = -I/home/jplank/cs360/include 
+INCLUDES = -I/home/jplank/cs360/include -pthread
 CFLAGS = $(INCLUDES)
 LIBDIR = /home/jplank/cs360/lib
 LIBS = $(LIBDIR)/libfdr.a $(LIBDIR)/sockettome.o
