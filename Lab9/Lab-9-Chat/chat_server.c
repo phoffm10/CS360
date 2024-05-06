@@ -28,14 +28,16 @@ typedef struct client{
   FILE* sock_write;
 }client;
 
+//forward declarations
+void *create_client(void* fd);
 void client_write(FILE* fd, char* string);
+void room_set(JRB rooms, char* name);
 
-//rb tree to hold all the rooms
+//Globals
 JRB rooms;
 
-
+//how to I add ctrl-d functionality?
 //function to create chat room
-//function to client
 void *create_client(void* fd){
   char s[1000];
   //malloc struct
@@ -47,15 +49,16 @@ void *create_client(void* fd){
   client_write(c->sock_write, "Chat Rooms:\n\n");
 
   JRB tmp;
+  Dllist dtmp;
   jrb_traverse(tmp, rooms){
-    //need to show current clients in each room as well
     room* r = (room *)tmp->val.v;
     client_write(c->sock_write, r->name);
     client_write(c->sock_write, ": ");
     if(!dll_empty(r->clients)){
-      Dllist dtmp;
       dll_traverse(dtmp, r->clients){
-        client_write(c->sock_write, dtmp->val.s);
+        client* other_c = (client *)dtmp->val.v;
+        client_write(c->sock_write, other_c->name);
+        client_write(c->sock_write, " ");
       }
     }
     client_write(c->sock_write, "\n");
@@ -68,51 +71,49 @@ void *create_client(void* fd){
     printf("Error -- socket closed\n");
     exit(1);
   } else {
+    s[strcspn(s, "\n")] = 0;
     c->name = strdup(s);
   }
 
+  //grabs chat room from client
   client_write(c->sock_write, "Enter chat room:\n");
   if (fgets(s, 1000, c->sock_read) == NULL) {
     printf("Error -- socket closed\n");
     exit(1);
   } else {
-    //add name to room
-    bool found = false;
-    // tmp = NULL;
-    // tmp = jrb_find_str(rooms, s);
-    jrb_traverse(tmp, rooms){      
-      if(strcmp(tmp->key.s, s) == 0){
-        bool found = true;
-        //room* r = (room *)tmp->val.v;
-        break;
-      }
-    }
-    if(found == false){
+    s[strcspn(s, "\n")] = 0;
+    room* r = jrb_find_str(rooms, s)->val.v;
+    if (r == NULL) {
       client_write(c->sock_write, "Room does not exist, exiting\n");
       exit(1);
     }
-    //This doesnt work----------------
-    tmp = jrb_find_str(rooms, s);
-    room* r = (room *)tmp->val.v;
+    //add client to room list
     pthread_mutex_lock(r->lock);
-    dll_append(r->clients, new_jval_s(strdup(c->name)));
+    dll_append(r->clients, new_jval_v((void *)c));
     pthread_mutex_unlock(r->lock);
-    //This needs to write to everyone
-    client_write(c->sock_write, c->name);
-    client_write(c->sock_write, " has joined\n");
-  /*
-    lock mutex
-    add to client list
-    send hello message
-  */
-  }
 
+    //send hello to everyone
+    sprintf(s, "%s has joined\n", c->name);
+    dll_traverse(dtmp, r->clients) {
+      client *other_c = (client *) dtmp->val.v;
+      client_write(other_c->sock_write, s);
+    }
+
+    //while(1){
+      //this is where i need to implement messaging
+      //build some message function
+      //add messages to the queue
+      //how/when should i process messages?
+    //}
+  }
 }
 
 void client_write(FILE* fd, char* string){
-  char s[1000];
-  sprintf(s, string);
-  write(fileno(fd), s, strlen(s));
+  // char s[1000];
+  // sprintf(s, string);
+  // write(fileno(fd), s, strlen(s));
+  // fflush(fd);
+  fputs(string, fd);
   fflush(fd);
 }
 
@@ -166,12 +167,16 @@ int main(int argc, char **argv){
   }
 
 
+
   /* Serve the socket and accept the connection. */
 //
   sock = serve_socket(port);
 
   jrb_traverse(tmp, rooms){
     room* r = (room *)tmp->val.v;
+    // dll_append(r->clients, new_jval_s(strdup("John")));
+    // dll_append(r->clients, new_jval_s(strdup("Peter")));
+    // dll_append(r->clients, new_jval_s(strdup("David")));
     printf("Name: %s\n", tmp->key);
   }
   
